@@ -1,0 +1,42 @@
+# Visual Studio files
+.vs/
+*.user
+*.userosscache
+*.suo
+*.ncrunch*
+*.dbmdl
+*.jfm
+*.userprefs
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+x64/
+x86/
+[Ww][Ii][Nn]32/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# C++ specific
+*.ilk
+*.pdb
+*.idb
+*.sbr
+*.bsc
+*.tlog
+
+# IDE specific
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
