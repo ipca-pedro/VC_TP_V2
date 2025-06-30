@@ -1,99 +1,158 @@
-#include "header.h"
+#include <opencv2/opencv.hpp>
 #include <iostream>
 #include <fstream>
+#include <vector>
 #include <map>
 #include <cmath>
+#include <chrono>
 
-std::vector<CoinInfo> global_coins;
+
+extern "C" {
+#include "header.h"
+}
+
+int limiarBinarizacao = 80;
+
+void mostrarTempo() {
+    static bool iniciou = false;
+    static auto tempoAnterior = std::chrono::steady_clock::now();
+    if (!iniciou) {
+        iniciou = true;
+    }
+    else {
+        auto tempoAtual = std::chrono::steady_clock::now();
+        double segundos = std::chrono::duration<double>(tempoAtual - tempoAnterior).count();
+        std::cout << "Tempo: " << segundos << " segundos\n";
+        std::cout << "Prima Enter para continuar...\n";
+        std::cin.get();
+    }
+}
+
+std::string identificarMoeda(double area, const std::string& ficheiro, std::map<std::string, int>& contador) {
+    if (ficheiro == "video1.mp4") {
+        if (area >= 2000 && area < 2900) { contador["1c"]++; return "1c"; }
+        else if (area >= 2900 && area < 3000) { contador["2c"]++; return "2c"; }
+        else if (area >= 3000 && area < 4000) { contador["5c"]++; return "5c"; }
+        else if (area >= 4000 && area < 6000) { contador["10c"]++; return "10c"; }
+        else if (area >= 6000 && area < 9000) { contador["20c"]++; return "20c"; }
+        else if (area >= 11500 && area < 13000) { contador["50c"]++; return "50c"; }
+        else if (area >= 9000 && area < 16000) { contador["1euro"]++; return "1€"; }
+        else if (area >= 16000 && area < 17000) { contador["2euro"]++; return "2€"; }
+    }
+    else if (ficheiro == "video2.mp4") {
+        if (area >= 2000 && area < 2600) { contador["1c"]++; return "1c"; }
+        else if (area >= 2600 && area < 2900) { contador["2c"]++; return "2c"; }
+        else if (area >= 2900 && area <= 3720) { contador["5c"]++; return "5c"; }
+        else if (area > 3720 && area < 4500) { contador["10c"]++; return "10c"; }
+        else if (area >= 4500 && area < 7800) { contador["20c"]++; return "20c"; }
+        else if (area >= 7800 && area < 7930) { contador["50c"]++; return "50c"; }
+        else if (area >= 7930 && area < 12000) { contador["1euro"]++; return "1€"; }
+        else if (area >= 12000 && area < 15000) { contador["2euro"]++; return "2€"; }
+    }
+    return "X";
+}
 
 int main() {
-    std::string video_file = "video1.mp4";
-    cv::VideoCapture capture(video_file);
+    std::string nomeVideo = "video1.mp4";
+    int distMinima = (nomeVideo == "video2.mp4") ? 25 : 15;
+    cv::VideoCapture video(nomeVideo);
 
-    if (!capture.isOpened()) {
-        std::cerr << "Erro ao abrir vídeo\n";
-        return -1;
+    if (!video.isOpened()) {
+        std::cerr << "Não foi possível abrir o vídeo.\n";
+        return 1;
     }
+
+    int largura = static_cast<int>(video.get(cv::CAP_PROP_FRAME_WIDTH));
+    int altura = static_cast<int>(video.get(cv::CAP_PROP_FRAME_HEIGHT));
 
     cv::namedWindow("Resultado", cv::WINDOW_AUTOSIZE);
-    std::ofstream output("estatisticas_moedas.csv");
-    output << "Tipo,Area,Perimetro,CentroX,CentroY\n";
+    cv::namedWindow("Binária", cv::WINDOW_AUTOSIZE);
 
-    cv::Mat frame;
-    int frame_count = 0;
+    mostrarTempo();
 
-    while (capture.read(frame)) {
+    std::ofstream ficheiroCSV("moedas_stats.csv");
+    ficheiroCSV << "Tipo,Area,Perimetro,Circularidade,CentroX,CentroY\n";
+
+    std::vector<cv::Point> centrosMoedas;
+    std::map<std::string, int> totalPorTipo;
+    int totalMoedas = 0;
+    int tecla = 0;
+
+    while (tecla != 'q') {
+        cv::Mat frame;
+        video >> frame;
         if (frame.empty()) break;
 
-        frame_count++;
+        IVC* imgVC = vc_image_new(largura, altura, 3, 255);
+        memcpy(imgVC->data, frame.data, largura * altura * 3);
+        IVC* imgCinza = vc_rgb_to_gray(imgVC);
+        IVC* imgBin = vc_gray_to_binary(imgCinza, limiarBinarizacao);
 
-        if (frame_count % 10 == 0) {
-            std::vector<CoinInfo> coins;
-            vc_process_frame(frame, coins, video_file);
+        cv::Mat binaria(altura, largura, CV_8UC1, imgBin->data);
+        binaria = binaria.clone();
 
-            for (size_t i = 0; i < coins.size(); i++) {
-                if (coins[i].type != "X") {
-                    bool is_new = true;
-                    for (size_t j = 0; j < global_coins.size(); j++) {
-                        double distance = std::sqrt(
-                            std::pow((double)(coins[i].centerX - global_coins[j].centerX), 2) +
-                            std::pow((double)(coins[i].centerY - global_coins[j].centerY), 2)
-                        );
-                        if (distance < 50) {
-                            is_new = false;
-                            break;
-                        }
-                    }
+        vc_image_free(imgCinza);
+        vc_image_free(imgBin);
 
-                    if (is_new) {
-                        global_coins.push_back(coins[i]);
-                        output << coins[i].type << "," << coins[i].area << ","
-                            << coins[i].perimeter << "," << coins[i].centerX << ","
-                            << coins[i].centerY << "\n";
-                    }
+        std::vector<std::vector<cv::Point>> contornos;
+        cv::findContours(binaria, contornos, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+        for (const auto& contorno : contornos) {
+            if (contorno.empty()) continue;
+
+            double area = std::fabs(cv::contourArea(contorno));
+            double perimetro = cv::arcLength(contorno, true);
+            if (area < 2000) continue;
+
+            double circ = 4 * CV_PI * area / (perimetro * perimetro);
+
+            cv::Rect caixa = cv::boundingRect(contorno);
+            cv::Point centro(caixa.x + caixa.width / 2, caixa.y + caixa.height / 2);
+
+            bool repetida = false;
+            for (const auto& c : centrosMoedas) {
+                if (cv::norm(c - centro) < distMinima) {
+                    repetida = true;
+                    break;
                 }
+
             }
+            if (repetida) continue;
+
+            centrosMoedas.push_back(centro);
+
+            draw_rectangle_rgb(imgVC, caixa.x, caixa.y, caixa.width, caixa.height, 0, 255, 0, 2);
+
+            std::string tipo = identificarMoeda(area, nomeVideo, totalPorTipo);
+
+            draw_rectangle_rgb(imgVC, centro.x - 1, centro.y - 1, 3, 3, 255, 0, 0, 1);
+            cv::putText(frame, tipo, cv::Point(centro.x - 20, centro.y - 10), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 255), 2);
+
+            ficheiroCSV << tipo << "," << static_cast<int>(area) << "," << static_cast<int>(perimetro) << "," << circ << "," << centro.x << "," << centro.y << "\n";
+
+            if (tipo != "X") totalMoedas++;
         }
 
-        vc_draw_results(frame, global_coins);
+        memcpy(frame.data, imgVC->data, largura * altura * 3);
+        vc_image_free(imgVC);
 
-        std::map<std::string, int> current_counts;
-        for (size_t i = 0; i < global_coins.size(); i++) {
-            if (global_coins[i].type != "X") {
-                current_counts[global_coins[i].type]++;
-            }
-        }
-
-        int total = 0;
-        for (std::map<std::string, int>::const_iterator it = current_counts.begin();
-            it != current_counts.end(); ++it) {
-            total += it->second;
-        }
-
-        cv::putText(frame, "Total: " + std::to_string(total),
-            cv::Point(20, 30), cv::FONT_HERSHEY_SIMPLEX,
-            0.8, cv::Scalar(0, 255, 255), 2);
-
+        cv::putText(frame, "Total: " + std::to_string(totalMoedas), cv::Point(20, 30), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
         cv::imshow("Resultado", frame);
-        if (cv::waitKey(100) == 'q') break;
+        cv::imshow("Binária", binaria);
+
+        tecla = cv::waitKey(100) & 0xFF;
+
     }
 
-    output.close();
+    ficheiroCSV.close();
 
-    std::cout << "\n===== Estatísticas Finais =====\n";
-    std::map<std::string, int> current_counts;
-    for (size_t i = 0; i < global_coins.size(); i++) {
-        if (global_coins[i].type != "X") {
-            current_counts[global_coins[i].type]++;
-        }
-    }
+    std::cout << "\n=== Contagem Final ===\n";
+    std::cout << "Moedas encontradas: " << totalMoedas << "\n";
+    for (const auto& par : totalPorTipo)
+        std::cout << "Moedas de " << par.first << ": " << par.second << "\n";
 
-    for (std::map<std::string, int>::const_iterator it = current_counts.begin();
-        it != current_counts.end(); ++it) {
-        std::cout << "Moedas de " << it->first << ": " << it->second << "\n";
-    }
-
-    capture.release();
+    mostrarTempo();
+    video.release();
     cv::destroyAllWindows();
     return 0;
 }
