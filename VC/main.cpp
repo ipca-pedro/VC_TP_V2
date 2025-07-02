@@ -5,9 +5,10 @@
 #include <map>
 #include <cmath>
 #include <chrono>
+#include <iomanip>
 
 extern "C" {
-#include "header.h"
+#include "Header.h" // Garanta que este é o nome correto do seu header
 }
 
 // Limiar para binarização da imagem em tons de cinza
@@ -29,30 +30,60 @@ void mostrarTempo() {
     }
 }
 
+// +++ FUNÇÃO CORRIGIDA PARA RESOLVER O ERRO C4716 +++
 // Função para identificar o tipo de moeda
 std::string identificarMoeda(double area, const std::string& ficheiro) {
+    std::string tipo = "X"; // Começa com um valor padrão "Desconhecido"
+
     if (ficheiro == "video1.mp4") {
-        if (area >= 2000 && area < 2900) return "1c";
-        else if (area >= 2900 && area < 3000) return "2c";
-        else if (area >= 3000 && area < 4000) return "5c";
-        else if (area >= 4000 && area < 6000) return "10c";
-        else if (area >= 6000 && area < 9000) return "20c";
-        else if (area >= 11500 && area < 13000) return "50c";
-        else if (area >= 9000 && area < 16000) return "1euro";
-        else if (area >= 16000 && area < 17000) return "2euro";
+        if (area >= 2000 && area < 2900) tipo = "1c";
+        else if (area >= 2900 && area < 3000) tipo = "2c";
+        else if (area >= 3000 && area < 4000) tipo = "5c";
+        else if (area >= 4000 && area < 6000) tipo = "10c";
+        else if (area >= 6000 && area < 9000) tipo = "20c";
+        else if (area >= 11500 && area < 13000) tipo = "50c";
+        else if (area >= 9000 && area < 16000) tipo = "1euro";
+        else if (area >= 16000 && area < 17000) tipo = "2euro";
     }
     else if (ficheiro == "video2.mp4") {
-        if (area >= 2000 && area < 2600) return "1c";
-        else if (area >= 2600 && area < 2900) return "2c";
-        else if (area >= 2900 && area <= 3720) return "5c";
-        else if (area > 3720 && area < 4500) return "10c";
-        else if (area >= 4500 && area < 7800) return "20c";
-        else if (area >= 7800 && area < 7930) return "50c";
-        else if (area >= 7930 && area < 12000) return "1euro";
-        else if (area >= 12000 && area < 15000) return "2euro";
+        if (area >= 2000 && area < 2600) tipo = "1c";
+        else if (area >= 2600 && area < 2900) tipo = "2c";
+        else if (area >= 2900 && area <= 3720) tipo = "5c";
+        else if (area > 3720 && area < 4500) tipo = "10c";
+        else if (area >= 4500 && area < 7800) tipo = "20c";
+        else if (area >= 7800 && area < 7930) tipo = "50c";
+        else if (area >= 7930 && area < 12000) tipo = "1euro";
+        else if (area >= 12000 && area < 15000) tipo = "2euro";
     }
-    return "X";
+
+    return tipo; // Retorna o tipo encontrado, ou "X" se nenhum correspondeu
 }
+
+// Função auxiliar para calcular manualmente as propriedades do blob
+void calcularPropriedadesManualmente(const std::vector<cv::Point>& contorno, OVC& blob_info) {
+    if (contorno.empty()) return;
+
+    int min_x = contorno[0].x, max_x = contorno[0].x;
+    int min_y = contorno[0].y, max_y = contorno[0].y;
+    long long sum_x = 0, sum_y = 0;
+
+    for (const auto& ponto : contorno) {
+        sum_x += ponto.x;
+        sum_y += ponto.y;
+        if (ponto.x < min_x) min_x = ponto.x;
+        if (ponto.x > max_x) max_x = ponto.x;
+        if (ponto.y < min_y) min_y = ponto.y;
+        if (ponto.y > max_y) max_y = ponto.y;
+    }
+
+    blob_info.x = min_x;
+    blob_info.y = min_y;
+    blob_info.width = max_x - min_x + 1;
+    blob_info.height = max_y - min_y + 1;
+    blob_info.xc = static_cast<int>(sum_x / contorno.size());
+    blob_info.yc = static_cast<int>(sum_y / contorno.size());
+}
+
 
 int main() {
     std::string nomeVideo = "video1.mp4";
@@ -81,8 +112,12 @@ int main() {
     std::map<int, bool> objetos_contados;
 
     std::map<std::string, int> contagemPorTipo;
+    double valorTotalEuros = 0.0;
     int totalMoedas = 0;
     int tecla = 0;
+
+    contagemPorTipo["1c"] = 0; contagemPorTipo["2c"] = 0; contagemPorTipo["5c"] = 0; contagemPorTipo["10c"] = 0;
+    contagemPorTipo["20c"] = 0; contagemPorTipo["50c"] = 0; contagemPorTipo["1euro"] = 0; contagemPorTipo["2euro"] = 0;
 
     while (tecla != 'q') {
         cv::Mat frame;
@@ -92,25 +127,26 @@ int main() {
         IVC* imgVC = vc_image_new(largura, altura, 3, 255);
         memcpy(imgVC->data, frame.data, largura * altura * 3);
 
-        IVC* imgCinza = vc_rgb_to_gray(imgVC);
-        IVC* imgBin = vc_gray_to_binary(imgCinza, limiarBinarizacao);
-        IVC* imgLabels = vc_image_new(largura, altura, sizeof(int), 0);
+        IVC* imgCinza = vc_image_new(largura, altura, 1, 255);
+        vc_rgb_to_gray(imgVC, imgCinza);
 
-        int n_labels = 0;
-        OVC* blobs = vc_binary_blob_labelling(imgBin, imgLabels, &n_labels);
+        IVC* imgBin = vc_image_new(largura, altura, 1, 255);
+        vc_gray_to_binary(imgCinza, imgBin, limiarBinarizacao);
+        vc_gray_negative(imgBin);
 
-        // +++ DEBUG PRINT 1: Informações gerais do frame +++
-        int frame_num = static_cast<int>(video.get(cv::CAP_PROP_POS_FRAMES));
-        std::cout << "--- Frame " << frame_num << ": Encontrados " << n_labels << " blobs ---" << std::endl;
+        cv::Mat binaria(altura, largura, CV_8UC1, imgBin->data);
+        std::vector<std::vector<cv::Point>> contornos;
 
-        for (int i = 0; i < n_labels; i++) {
-            OVC* blob = &blobs[i];
-            if (blob->area < 1500) continue;
+        cv::findContours(binaria, contornos, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-            // +++ DEBUG PRINT 2: Informações de cada blob válido +++
-            std::cout << "  Blob " << i << ": Area=" << blob->area << ", Centro=(" << blob->xc << "," << blob->yc << ")" << std::endl;
+        for (const auto& contorno : contornos) {
+            double area = cv::contourArea(contorno);
+            if (area < 1500) continue;
 
-            cv::Point centro_atual(blob->xc, blob->yc);
+            OVC blob_info = { 0 };
+            calcularPropriedadesManualmente(contorno, blob_info);
+
+            cv::Point centro_atual(blob_info.xc, blob_info.yc);
             int id_associado = -1;
             double menor_dist = distMinima;
 
@@ -124,43 +160,52 @@ int main() {
                 }
             }
 
-            if (id_associado != -1) { // Encontrou um objeto correspondente
-                // +++ DEBUG PRINT 3: Informação de rastreamento +++
-                std::cout << "    -> Associado ao Objeto ID " << id_associado << " (Dist: " << menor_dist << ")" << std::endl;
-
+            if (id_associado != -1) {
                 cv::Point pos_anterior = objetos_rastreados[id_associado];
                 objetos_rastreados[id_associado] = centro_atual;
 
                 if (pos_anterior.y >= linha_contagem_y && centro_atual.y < linha_contagem_y && !objetos_contados[id_associado]) {
                     totalMoedas++;
                     objetos_contados[id_associado] = true;
-                    std::string tipo = identificarMoeda(blob->area, nomeVideo);
-                    if (tipo != "X") contagemPorTipo[tipo]++;
-                    // +++ DEBUG PRINT 4: Informação de CONTAGEM! +++
-                    std::cout << "    !!!!!! MOEDA CONTADA !!!!!! ID: " << id_associado << ", Tipo: " << tipo << ", Total: " << totalMoedas << std::endl;
-                    ficheiroCSV << tipo << "," << blob->area << "," << blob->xc << "," << blob->yc << "\n";
+                    std::string tipo = identificarMoeda(area, nomeVideo);
+                    if (tipo != "X") {
+                        contagemPorTipo[tipo]++;
+                        if (tipo == "1c") valorTotalEuros += 0.01; else if (tipo == "2c") valorTotalEuros += 0.02;
+                        else if (tipo == "5c") valorTotalEuros += 0.05; else if (tipo == "10c") valorTotalEuros += 0.10;
+                        else if (tipo == "20c") valorTotalEuros += 0.20; else if (tipo == "50c") valorTotalEuros += 0.50;
+                        else if (tipo == "1euro") valorTotalEuros += 1.00; else if (tipo == "2euro") valorTotalEuros += 2.00;
+                    }
+                    ficheiroCSV << tipo << "," << area << "," << centro_atual.x << "," << centro_atual.y << "\n";
                 }
             }
-            else { // Não encontrou, é um novo objeto
+            else {
                 if (centro_atual.y > linha_contagem_y) {
-                    // +++ DEBUG PRINT 5: Novo objeto detetado +++
-                    std::cout << "    -> Novo Objeto detetado! Atribuindo ID " << proximo_id_objeto << std::endl;
                     objetos_rastreados[proximo_id_objeto] = centro_atual;
                     objetos_contados[proximo_id_objeto] = false;
                     proximo_id_objeto++;
                 }
             }
 
-            vc_draw_bounding_box(imgVC, blob);
-            vc_draw_center_of_gravity(imgVC, blob, 5);
+            vc_draw_bounding_box(imgVC, &blob_info);
+            vc_draw_center_of_gravity(imgVC, &blob_info, 5);
         }
 
-        if (blobs) free(blobs);
-
         memcpy(frame.data, imgVC->data, largura * altura * 3);
+
         cv::line(frame, cv::Point(0, linha_contagem_y), cv::Point(largura, linha_contagem_y), cv::Scalar(0, 0, 255), 2);
-        cv::Mat binaria(altura, largura, CV_8UC1, imgBin->data);
-        cv::putText(frame, "Total: " + std::to_string(totalMoedas), cv::Point(20, 30), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
+
+        int pos_y_painel = 30;
+        for (const auto& par : contagemPorTipo) {
+            std::string texto = par.first + ": " + std::to_string(par.second);
+            cv::putText(frame, texto, cv::Point(20, pos_y_painel), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 0, 0), 2);
+            cv::putText(frame, texto, cv::Point(20, pos_y_painel), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 255), 1);
+            pos_y_painel += 25;
+        }
+        std::stringstream stream;
+        stream << std::fixed << std::setprecision(2) << valorTotalEuros;
+        std::string texto_total = "Total: " + stream.str() + " EUR";
+        cv::putText(frame, texto_total, cv::Point(20, pos_y_painel + 10), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 0), 2);
+        cv::putText(frame, texto_total, cv::Point(20, pos_y_painel + 10), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 255), 1);
 
         cv::imshow("Resultado", frame);
         cv::imshow("Binária", binaria);
@@ -168,7 +213,6 @@ int main() {
         vc_image_free(imgVC);
         vc_image_free(imgCinza);
         vc_image_free(imgBin);
-        vc_image_free(imgLabels);
 
         tecla = cv::waitKey(100) & 0xFF;
     }
@@ -176,9 +220,10 @@ int main() {
     ficheiroCSV.close();
 
     std::cout << "\n=== Contagem Final ===\n";
-    std::cout << "Moedas encontradas: " << totalMoedas << "\n";
+    std::cout << "Moedas contadas: " << totalMoedas << "\n";
     for (const auto& par : contagemPorTipo)
         std::cout << "Moedas de " << par.first << ": " << par.second << "\n";
+    std::cout << "Valor Total: " << std::fixed << std::setprecision(2) << valorTotalEuros << " EUR\n";
 
     mostrarTempo();
     video.release();
