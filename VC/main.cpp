@@ -6,7 +6,6 @@
 #include <cmath>
 #include <chrono>
 
-// Inclusão de funções C definidas em "header.h"
 extern "C" {
 #include "header.h"
 }
@@ -14,7 +13,7 @@ extern "C" {
 // Limiar para binarização da imagem em tons de cinza
 int limiarBinarizacao = 80;
 
-// Função para mostrar o tempo decorrido entre chamadas e pausar a execução
+// Função para mostrar o tempo decorrido
 void mostrarTempo() {
     static bool iniciou = false;
     static auto tempoAnterior = std::chrono::steady_clock::now();
@@ -30,153 +29,150 @@ void mostrarTempo() {
     }
 }
 
-// Função para identificar o tipo de moeda com base na área e no vídeo
-// Atualiza o contador de cada tipo de moeda
-std::string identificarMoeda(double area, const std::string& ficheiro, std::map<std::string, int>& contador) {
+// Função para identificar o tipo de moeda
+std::string identificarMoeda(double area, const std::string& ficheiro) {
     if (ficheiro == "video1.mp4") {
-        if (area >= 2000 && area < 2900) { contador["1c"]++; return "1c"; }
-        else if (area >= 2900 && area < 3000) { contador["2c"]++; return "2c"; }
-        else if (area >= 3000 && area < 4000) { contador["5c"]++; return "5c"; }
-        else if (area >= 4000 && area < 6000) { contador["10c"]++; return "10c"; }
-        else if (area >= 6000 && area < 9000) { contador["20c"]++; return "20c"; }
-        else if (area >= 11500 && area < 13000) { contador["50c"]++; return "50c"; }
-        else if (area >= 9000 && area < 16000) { contador["1euro"]++; return "1€"; }
-        else if (area >= 16000 && area < 17000) { contador["2euro"]++; return "2€"; }
+        if (area >= 2000 && area < 2900) return "1c";
+        else if (area >= 2900 && area < 3000) return "2c";
+        else if (area >= 3000 && area < 4000) return "5c";
+        else if (area >= 4000 && area < 6000) return "10c";
+        else if (area >= 6000 && area < 9000) return "20c";
+        else if (area >= 11500 && area < 13000) return "50c";
+        else if (area >= 9000 && area < 16000) return "1euro";
+        else if (area >= 16000 && area < 17000) return "2euro";
     }
     else if (ficheiro == "video2.mp4") {
-        if (area >= 2000 && area < 2600) { contador["1c"]++; return "1c"; }
-        else if (area >= 2600 && area < 2900) { contador["2c"]++; return "2c"; }
-        else if (area >= 2900 && area <= 3720) { contador["5c"]++; return "5c"; }
-        else if (area > 3720 && area < 4500) { contador["10c"]++; return "10c"; }
-        else if (area >= 4500 && area < 7800) { contador["20c"]++; return "20c"; }
-        else if (area >= 7800 && area < 7930) { contador["50c"]++; return "50c"; }
-        else if (area >= 7930 && area < 12000) { contador["1euro"]++; return "1€"; }
-        else if (area >= 12000 && area < 15000) { contador["2euro"]++; return "2€"; }
+        if (area >= 2000 && area < 2600) return "1c";
+        else if (area >= 2600 && area < 2900) return "2c";
+        else if (area >= 2900 && area <= 3720) return "5c";
+        else if (area > 3720 && area < 4500) return "10c";
+        else if (area >= 4500 && area < 7800) return "20c";
+        else if (area >= 7800 && area < 7930) return "50c";
+        else if (area >= 7930 && area < 12000) return "1euro";
+        else if (area >= 12000 && area < 15000) return "2euro";
     }
-    return "X"; // Retorna "X" se não corresponder a nenhum tipo
+    return "X";
 }
 
 int main() {
-    // Nome do vídeo a ser processado
     std::string nomeVideo = "video1.mp4";
-    // Distância mínima para considerar moedas diferentes (ajustada por vídeo)
-    int distMinima = (nomeVideo == "video2.mp4") ? 25 : 15;
+    int distMinima = 40;
     cv::VideoCapture video(nomeVideo);
 
-    // Verifica se o vídeo foi aberto corretamente
     if (!video.isOpened()) {
         std::cerr << "Não foi possível abrir o vídeo.\n";
         return 1;
     }
 
-    // Obtém as dimensões do vídeo
     int largura = static_cast<int>(video.get(cv::CAP_PROP_FRAME_WIDTH));
     int altura = static_cast<int>(video.get(cv::CAP_PROP_FRAME_HEIGHT));
 
-    // Cria janelas para exibir os resultados
     cv::namedWindow("Resultado", cv::WINDOW_AUTOSIZE);
     cv::namedWindow("Binária", cv::WINDOW_AUTOSIZE);
 
-    mostrarTempo(); // Marca o início do processamento
+    mostrarTempo();
 
-    // Abre arquivo CSV para salvar estatísticas das moedas
     std::ofstream ficheiroCSV("moedas_stats.csv");
-    ficheiroCSV << "Tipo,Area,Perimetro,Circularidade,CentroX,CentroY\n";
+    ficheiroCSV << "Tipo,Area,CentroX,CentroY\n";
 
-    std::vector<cv::Point> centrosMoedas; // Guarda os centros das moedas já detectadas
-    std::map<std::string, int> totalPorTipo; // Contador por tipo de moeda
-    int totalMoedas = 0; // Contador total de moedas
-    int tecla = 0; // Variável para leitura de teclas
+    const int linha_contagem_y = altura * 2 / 3;
+    int proximo_id_objeto = 0;
+    std::map<int, cv::Point> objetos_rastreados;
+    std::map<int, bool> objetos_contados;
 
-    // Loop principal de processamento de frames
+    std::map<std::string, int> contagemPorTipo;
+    int totalMoedas = 0;
+    int tecla = 0;
+
     while (tecla != 'q') {
         cv::Mat frame;
-        video >> frame; // Lê o próximo frame
-        if (frame.empty()) break; // Sai se não houver mais frames
+        video >> frame;
+        if (frame.empty()) break;
 
-        // Converte frame para estrutura IVC (usada pelas funções do header)
         IVC* imgVC = vc_image_new(largura, altura, 3, 255);
         memcpy(imgVC->data, frame.data, largura * altura * 3);
-        IVC* imgCinza = vc_rgb_to_gray(imgVC); // Converte para tons de cinza
-        IVC* imgBin = vc_gray_to_binary(imgCinza, limiarBinarizacao); // Binariza
 
-        // Cria uma matriz OpenCV a partir da imagem binária
-        cv::Mat binaria(altura, largura, CV_8UC1, imgBin->data);
-        binaria = binaria.clone(); // Garante que os dados não sejam sobrescritos
+        IVC* imgCinza = vc_rgb_to_gray(imgVC);
+        IVC* imgBin = vc_gray_to_binary(imgCinza, limiarBinarizacao);
+        IVC* imgLabels = vc_image_new(largura, altura, sizeof(int), 0);
 
-        // Libera memória das imagens intermediárias
-        vc_image_free(imgCinza);
-        vc_image_free(imgBin);
+        int n_labels = 0;
+        OVC* blobs = vc_binary_blob_labelling(imgBin, imgLabels, &n_labels);
 
-        // Detecta contornos na imagem binária
-        std::vector<std::vector<cv::Point>> contornos;
-        cv::findContours(binaria, contornos, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+        for (int i = 0; i < n_labels; i++) {
+            OVC* blob = &blobs[i];
+            if (blob->area < 1500) continue;
 
-        // Processa cada contorno encontrado
-        for (const auto& contorno : contornos) {
-            if (contorno.empty()) continue;
+            cv::Point centro_atual(blob->xc, blob->yc);
+            int id_associado = -1;
+            double menor_dist = distMinima;
 
-            double area = std::fabs(cv::contourArea(contorno)); // Calcula área
-            double perimetro = cv::arcLength(contorno, true); // Calcula perímetro
-            if (area < 2000) continue; // Ignora áreas pequenas (ruído)
+            // +++ CORREÇÃO DE SINTAXE APLICADA AQUI +++
+            // Usa a sintaxe antiga e compatível para iterar sobre o map
+            for (auto const& par : objetos_rastreados) {
+                int id = par.first;
+                cv::Point pos = par.second;
+                double dist = cv::norm(centro_atual - pos);
 
-            double circ = 4 * CV_PI * area / (perimetro * perimetro); // Circularidade
-
-            // Calcula o retângulo delimitador e o centro do contorno
-            cv::Rect caixa = cv::boundingRect(contorno);
-            cv::Point centro(caixa.x + caixa.width / 2, caixa.y + caixa.height / 2);
-
-            // Verifica se a moeda já foi contada (evita duplicatas)
-            bool repetida = false;
-            for (const auto& c : centrosMoedas) {
-                if (cv::norm(c - centro) < distMinima) {
-                    repetida = true;
-                    break;
+                if (dist < menor_dist) {
+                    menor_dist = dist;
+                    id_associado = id;
                 }
             }
-            if (repetida) continue;
 
-            centrosMoedas.push_back(centro); // Adiciona novo centro
+            if (id_associado != -1) { // Encontrou um objeto correspondente
+                objetos_rastreados[id_associado] = centro_atual;
 
-            // Desenha retângulo ao redor da moeda
-            draw_rectangle_rgb(imgVC, caixa.x, caixa.y, caixa.width, caixa.height, 0, 255, 0, 2);
+                // Verifica se cruzou a linha E AINDA NÃO FOI CONTADO
+                if (centro_atual.y > linha_contagem_y && objetos_contados.count(id_associado) > 0 && !objetos_contados[id_associado]) {
+                    totalMoedas++;
+                    objetos_contados[id_associado] = true; // Marca como contado
+                    std::string tipo = identificarMoeda(blob->area, nomeVideo);
+                    if (tipo != "X") contagemPorTipo[tipo]++;
+                    std::cout << "Moeda Contada! ID: " << id_associado << ", Tipo: " << tipo << ", Total: " << totalMoedas << std::endl;
+                    ficheiroCSV << tipo << "," << blob->area << "," << blob->xc << "," << blob->yc << "\n";
+                }
+            }
+            else { // Não encontrou, é um novo objeto
+                objetos_rastreados[proximo_id_objeto] = centro_atual;
+                objetos_contados[proximo_id_objeto] = false; // Novo objeto, ainda não foi contado
+                proximo_id_objeto++;
+            }
 
-            // Identifica o tipo de moeda
-            std::string tipo = identificarMoeda(area, nomeVideo, totalPorTipo);
-
-            // Marca o centro da moeda
-            draw_rectangle_rgb(imgVC, centro.x - 1, centro.y - 1, 3, 3, 255, 0, 0, 1);
-            // Escreve o tipo da moeda na imagem
-            cv::putText(frame, tipo, cv::Point(centro.x - 20, centro.y - 10), cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(255, 255, 255), 2);
-
-            // Salva estatísticas da moeda no CSV
-            ficheiroCSV << tipo << "," << static_cast<int>(area) << "," << static_cast<int>(perimetro) << "," << circ << "," << centro.x << "," << centro.y << "\n";
-
-            if (tipo != "X") totalMoedas++; // Incrementa total se for moeda válida
+            // Desenha sempre, para visualização
+            vc_draw_bounding_box(imgVC, blob);
+            vc_draw_center_of_gravity(imgVC, blob, 5);
         }
 
-        // Atualiza frame com as marcações desenhadas
-        memcpy(frame.data, imgVC->data, largura * altura * 3);
-        vc_image_free(imgVC);
+        if (blobs) free(blobs);
 
-        // Mostra o total de moedas detectadas no frame
+        // Prepara as imagens para exibição
+        memcpy(frame.data, imgVC->data, largura * altura * 3);
+        cv::line(frame, cv::Point(0, linha_contagem_y), cv::Point(largura, linha_contagem_y), cv::Scalar(0, 0, 255), 2);
+        cv::Mat binaria(altura, largura, CV_8UC1, imgBin->data);
         cv::putText(frame, "Total: " + std::to_string(totalMoedas), cv::Point(20, 30), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
+
+        // Exibe as imagens
         cv::imshow("Resultado", frame);
         cv::imshow("Binária", binaria);
 
-        // Aguarda tecla por 100ms (sai se for 'q')
+        // Liberta a memória
+        vc_image_free(imgVC);
+        vc_image_free(imgCinza);
+        vc_image_free(imgBin);
+        vc_image_free(imgLabels);
+
         tecla = cv::waitKey(100) & 0xFF;
     }
 
-    ficheiroCSV.close(); // Fecha o arquivo CSV
+    ficheiroCSV.close();
 
-    // Mostra a contagem final de moedas por tipo
     std::cout << "\n=== Contagem Final ===\n";
     std::cout << "Moedas encontradas: " << totalMoedas << "\n";
-    for (const auto& par : totalPorTipo)
+    for (const auto& par : contagemPorTipo)
         std::cout << "Moedas de " << par.first << ": " << par.second << "\n";
 
-    mostrarTempo(); // Mostra o tempo total de execução
+    mostrarTempo();
     video.release();
     cv::destroyAllWindows();
     return 0;

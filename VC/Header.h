@@ -5,15 +5,21 @@
 
 // Estrutura de imagem
 typedef struct {
-    unsigned char* data;   // Dados da imagem
-    int width, height;     // Dimensões
-    int channels;          // Número de canais (1 = Gray, 3 = RGB)
-    int levels;            // Níveis de intensidade (ex: 255)
+    unsigned char* data;
+    int width, height;
+    int channels;
+    int levels;
+    int bytesperline;
 } IVC;
 
+// Estrutura para armazenar informações de um blob (Object)
 typedef struct {
-    int x, y;
-} Point;
+    int x, y;           // Posição do canto superior esquerdo da bounding box
+    int width, height;  // Dimensões da bounding box
+    int area;           // Área (número de píxeis)
+    int xc, yc;         // Coordenadas do centro de massa (centroide)
+    int label;          // Rótulo do blob
+} OVC;
 
 // Alocação e libertação de memória
 IVC* vc_image_new(int width, int height, int channels, int levels);
@@ -22,10 +28,14 @@ int vc_image_free(IVC* image);
 // Conversão RGB -> Grayscale
 IVC* vc_rgb_to_gray(IVC* src);
 
-// Binarização simples (limiar fixo)
+// Binarização simples
 IVC* vc_gray_to_binary(IVC* src, int threshold);
 
-// Desenho de retângulo RGB
-void draw_rectangle_rgb(IVC* image, int x, int y, int width, int height, unsigned char r, unsigned char g, unsigned char b, int thickness);
+// Análise de Blobs
+OVC* vc_binary_blob_labelling(IVC* src, IVC* dst, int* nlabels);
+
+// Desenho
+int vc_draw_bounding_box(IVC* img, OVC* blob);
+int vc_draw_center_of_gravity(IVC* img, OVC* blob, int size);
 
 #endif
