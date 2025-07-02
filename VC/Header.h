@@ -18,7 +18,7 @@ typedef struct {
     int width, height;  // Dimensões da bounding box
     int area;           // Área (número de píxeis)
     int xc, yc;         // Coordenadas do centro de massa (centroide)
-    int label;          // Rótulo do blob
+    int label;          // <<< ADICIONE ESTA LINHA: Rótulo numérico do blob
 } OVC;
 
 // Alocação e libertação de memória

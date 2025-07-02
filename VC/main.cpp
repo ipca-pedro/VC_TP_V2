@@ -75,7 +75,7 @@ int main() {
     std::ofstream ficheiroCSV("moedas_stats.csv");
     ficheiroCSV << "Tipo,Area,CentroX,CentroY\n";
 
-    const int linha_contagem_y = altura * 2 / 3;
+    const int linha_contagem_y = altura / 3;
     int proximo_id_objeto = 0;
     std::map<int, cv::Point> objetos_rastreados;
     std::map<int, bool> objetos_contados;
@@ -99,21 +99,25 @@ int main() {
         int n_labels = 0;
         OVC* blobs = vc_binary_blob_labelling(imgBin, imgLabels, &n_labels);
 
+        // +++ DEBUG PRINT 1: Informações gerais do frame +++
+        int frame_num = static_cast<int>(video.get(cv::CAP_PROP_POS_FRAMES));
+        std::cout << "--- Frame " << frame_num << ": Encontrados " << n_labels << " blobs ---" << std::endl;
+
         for (int i = 0; i < n_labels; i++) {
             OVC* blob = &blobs[i];
             if (blob->area < 1500) continue;
+
+            // +++ DEBUG PRINT 2: Informações de cada blob válido +++
+            std::cout << "  Blob " << i << ": Area=" << blob->area << ", Centro=(" << blob->xc << "," << blob->yc << ")" << std::endl;
 
             cv::Point centro_atual(blob->xc, blob->yc);
             int id_associado = -1;
             double menor_dist = distMinima;
 
-            // +++ CORREÇÃO DE SINTAXE APLICADA AQUI +++
-            // Usa a sintaxe antiga e compatível para iterar sobre o map
             for (auto const& par : objetos_rastreados) {
                 int id = par.first;
                 cv::Point pos = par.second;
                 double dist = cv::norm(centro_atual - pos);
-
                 if (dist < menor_dist) {
                     menor_dist = dist;
                     id_associado = id;
@@ -121,42 +125,46 @@ int main() {
             }
 
             if (id_associado != -1) { // Encontrou um objeto correspondente
+                // +++ DEBUG PRINT 3: Informação de rastreamento +++
+                std::cout << "    -> Associado ao Objeto ID " << id_associado << " (Dist: " << menor_dist << ")" << std::endl;
+
+                cv::Point pos_anterior = objetos_rastreados[id_associado];
                 objetos_rastreados[id_associado] = centro_atual;
 
-                // Verifica se cruzou a linha E AINDA NÃO FOI CONTADO
-                if (centro_atual.y > linha_contagem_y && objetos_contados.count(id_associado) > 0 && !objetos_contados[id_associado]) {
+                if (pos_anterior.y >= linha_contagem_y && centro_atual.y < linha_contagem_y && !objetos_contados[id_associado]) {
                     totalMoedas++;
-                    objetos_contados[id_associado] = true; // Marca como contado
+                    objetos_contados[id_associado] = true;
                     std::string tipo = identificarMoeda(blob->area, nomeVideo);
                     if (tipo != "X") contagemPorTipo[tipo]++;
-                    std::cout << "Moeda Contada! ID: " << id_associado << ", Tipo: " << tipo << ", Total: " << totalMoedas << std::endl;
+                    // +++ DEBUG PRINT 4: Informação de CONTAGEM! +++
+                    std::cout << "    !!!!!! MOEDA CONTADA !!!!!! ID: " << id_associado << ", Tipo: " << tipo << ", Total: " << totalMoedas << std::endl;
                     ficheiroCSV << tipo << "," << blob->area << "," << blob->xc << "," << blob->yc << "\n";
                 }
             }
             else { // Não encontrou, é um novo objeto
-                objetos_rastreados[proximo_id_objeto] = centro_atual;
-                objetos_contados[proximo_id_objeto] = false; // Novo objeto, ainda não foi contado
-                proximo_id_objeto++;
+                if (centro_atual.y > linha_contagem_y) {
+                    // +++ DEBUG PRINT 5: Novo objeto detetado +++
+                    std::cout << "    -> Novo Objeto detetado! Atribuindo ID " << proximo_id_objeto << std::endl;
+                    objetos_rastreados[proximo_id_objeto] = centro_atual;
+                    objetos_contados[proximo_id_objeto] = false;
+                    proximo_id_objeto++;
+                }
             }
 
-            // Desenha sempre, para visualização
             vc_draw_bounding_box(imgVC, blob);
             vc_draw_center_of_gravity(imgVC, blob, 5);
         }
 
         if (blobs) free(blobs);
 
-        // Prepara as imagens para exibição
         memcpy(frame.data, imgVC->data, largura * altura * 3);
         cv::line(frame, cv::Point(0, linha_contagem_y), cv::Point(largura, linha_contagem_y), cv::Scalar(0, 0, 255), 2);
         cv::Mat binaria(altura, largura, CV_8UC1, imgBin->data);
         cv::putText(frame, "Total: " + std::to_string(totalMoedas), cv::Point(20, 30), cv::FONT_HERSHEY_SIMPLEX, 1.0, cv::Scalar(0, 255, 255), 2);
 
-        // Exibe as imagens
         cv::imshow("Resultado", frame);
         cv::imshow("Binária", binaria);
 
-        // Liberta a memória
         vc_image_free(imgVC);
         vc_image_free(imgCinza);
         vc_image_free(imgBin);

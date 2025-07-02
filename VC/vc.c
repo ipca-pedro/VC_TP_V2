@@ -66,6 +66,7 @@ IVC* vc_gray_to_binary(IVC* src, int threshold) {
 // vc.c
 
 // Função para encontrar blobs, calcular as suas propriedades e etiquetá-los.
+// Função para encontrar blobs, calcular as suas propriedades e etiquetá-los.
 OVC* vc_binary_blob_labelling(IVC* src, IVC* dst, int* nlabels) {
     unsigned char* datasrc = (unsigned char*)src->data;
     int* datadst = (int*)dst->data;
@@ -77,9 +78,6 @@ OVC* vc_binary_blob_labelling(IVC* src, IVC* dst, int* nlabels) {
     OVC* blobs;
 
     if (!src || !dst || !src->data || !dst->data || !nlabels) return NULL;
-
-    // +++ CORREÇÃO APLICADA AQUI +++
-    // A verificação agora confirma se a imagem de destino tem canais suficientes para um 'int'.
     if (dst->width != width || dst->height != height || dst->channels != sizeof(int)) return NULL;
 
     blobs = (OVC*)calloc(max_labels, sizeof(OVC));
@@ -87,10 +85,10 @@ OVC* vc_binary_blob_labelling(IVC* src, IVC* dst, int* nlabels) {
 
     memset(datadst, 0, width * height * sizeof(int));
 
-    // Primeira passagem: etiquetagem de blobs (algoritmo simples de 4 vizinhos)
+    // Primeira passagem: etiquetagem de blobs
     for (y = 1; y < height; y++) {
         for (x = 1; x < width; x++) {
-            if (datasrc[y * width + x] != 0) { // Procura por píxeis brancos
+            if (datasrc[y * width + x] != 0) {
                 int left_label = datadst[y * width + (x - 1)];
                 int top_label = datadst[(y - 1) * width + x];
 
@@ -103,15 +101,14 @@ OVC* vc_binary_blob_labelling(IVC* src, IVC* dst, int* nlabels) {
                 else if (left_label == 0 && top_label != 0) {
                     datadst[y * width + x] = top_label;
                 }
-                else if (left_label != 0 && top_label != 0) {
+                else {
                     if (left_label == top_label) {
                         datadst[y * width + x] = top_label;
                     }
-                    else { // Merge de labels
+                    else {
                         int min_label = (left_label < top_label) ? left_label : top_label;
                         int max_label = (left_label > top_label) ? left_label : top_label;
                         datadst[y * width + x] = min_label;
-                        // Otimização: Apenas altera o blob maior para o menor
                         for (i = 0; i < y * width + x; i++) {
                             if (datadst[i] == max_label) datadst[i] = min_label;
                         }
@@ -123,9 +120,9 @@ OVC* vc_binary_blob_labelling(IVC* src, IVC* dst, int* nlabels) {
 
     *nlabels = label - 1;
 
-    // Calcula as propriedades de cada blob
+    // Inicializa os blobs para a segunda passagem
     for (i = 0; i < *nlabels; i++) {
-        blobs[i].label = i + 1;
+        blobs[i].label = i + 1; // Atribui o rótulo
         blobs[i].x = width;
         blobs[i].y = height;
         blobs[i].width = 0;
@@ -138,6 +135,7 @@ OVC* vc_binary_blob_labelling(IVC* src, IVC* dst, int* nlabels) {
     long int* sum_x = (long int*)calloc(*nlabels + 1, sizeof(long int));
     long int* sum_y = (long int*)calloc(*nlabels + 1, sizeof(long int));
 
+    // Segunda passagem: calcula as propriedades
     for (y = 0; y < height; y++) {
         for (x = 0; x < width; x++) {
             int current_label = datadst[y * width + x];
