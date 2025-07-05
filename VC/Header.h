@@ -25,6 +25,7 @@ int vc_gray_negative(IVC* srcdst);
 int vc_draw_bounding_box(IVC* img, OVC* blob);
 int vc_draw_center_of_gravity(IVC* img, OVC* blob, int size);
 int blob_e_cor_a_descartar(IVC* img_colorida, OVC* blob_info, const char* ficheiro);
+int vc_draw_horizontal_line(IVC* img, int y, int r, int g, int b);
 
 // Morfologia
 int vc_binary_erode(IVC* src, IVC* dst, int kernel_size);

@@ -321,4 +321,28 @@ int vc_gray_box_blur(IVC* src, IVC* dst, int kernel_size) {
         }
     }
     return 1;
+
+}
+
+
+int vc_draw_horizontal_line(IVC* img, int y, int r, int g, int b)
+{
+    // Validação de segurança: verifica se a imagem e os dados são válidos
+    // e se a linha está dentro dos limites da altura da imagem.
+    if (!img || !img->data || img->channels != 3 || y < 0 || y >= img->height) {
+        return 0; // Retorna 0 em caso de erro
+    }
+
+    // Itera por todos os píxeis da largura da imagem (de x=0 até width-1)
+    for (int x = 0; x < img->width; x++) {
+        // Calcula a posição do píxel na memória (array 1D)
+        long int pos = y * img->bytesperline + x * img->channels;
+
+        // Define a cor do píxel. Lembre-se que OpenCV usa a ordem BGR.
+        img->data[pos] = b; // Canal Azul (Blue)
+        img->data[pos + 1] = g; // Canal Verde (Green)
+        img->data[pos + 2] = r; // Canal Vermelho (Red)
+    }
+
+    return 1; // Retorna 1 em caso de sucesso
 }

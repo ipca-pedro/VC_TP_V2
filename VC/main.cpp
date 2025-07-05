@@ -73,7 +73,8 @@ void calcularPropriedadesManualmente(const std::vector<cv::Point>& contorno, OVC
     blob_info.yc = static_cast<int>(sum_y / contorno.size());
 }
 
-int main() {
+int main()
+{
     std::string nomeVideo = "video1.mp4";
     int limiarBinarizacao;
 
@@ -118,6 +119,7 @@ int main() {
         video >> frame;
         if (frame.empty()) break;
 
+        // --- 1. PREPARAÇÃO (UMA VEZ POR FRAME) ---
         IVC* imgVC = vc_image_new(largura, altura, 3, 255);
         memcpy(imgVC->data, frame.data, largura * altura * 3);
 
@@ -140,7 +142,7 @@ int main() {
         std::vector<OVC> blobs_validos;
         std::vector<double> areas_validas;
 
-        // +++ PRIMEIRO LOOP: FILTRAGEM E PROCESSAMENTO DE DADOS +++
+        // --- 2. PROCESSAMENTO DE TODOS OS CONTORNOS ---
         for (const auto& contorno : contornos) {
             double area = cv::contourArea(contorno);
             if (area < 1500) continue;
@@ -148,34 +150,27 @@ int main() {
             OVC blob_info = { 0 };
             calcularPropriedadesManualmente(contorno, blob_info);
 
-            // Passa o nome do vídeo para a função de descarte de cor
             if (blob_e_cor_a_descartar(imgVC, &blob_info, nomeVideo.c_str())) {
                 continue;
             }
 
-            // +++ MUDANÇA 1: Filtro de Relação de Aspeto (Aspect Ratio) +++
             float aspect_ratio = (float)blob_info.width / (float)blob_info.height;
-            // Normaliza para estar sempre <= 1 (ex: 1.25 vira 0.8)
             if (aspect_ratio > 1.0f) aspect_ratio = 1.0f / aspect_ratio;
-            // Se o objeto for muito "esticado" (não for quadrado/redondo), ignora-o.
             if (aspect_ratio < 0.75f) {
                 continue;
             }
 
-            // O objeto passou em todos os filtros, agora podemos processá-lo.
             blobs_validos.push_back(blob_info);
             areas_validas.push_back(area);
 
-            // +++ MUDANÇA 2: Identifica o tipo ANTES de desenhar +++
             std::string tipo = identificarMoeda(area, nomeVideo);
 
-            // Apenas desenha a caixa e o centro de gravidade se for uma moeda válida
             if (tipo != "X") {
                 vc_draw_bounding_box(imgVC, &blob_info);
                 vc_draw_center_of_gravity(imgVC, &blob_info, 5);
             }
 
-            // Lógica de rastreio continua igual
+            // --- LÓGICA DE RASTREAMENTO (PARA ESTE CONTORNO) ---
             cv::Point centro_atual(blob_info.xc, blob_info.yc);
             int id_associado = -1;
             double menor_dist = distMinima;
@@ -183,8 +178,14 @@ int main() {
             for (auto const& par : objetos_rastreados) {
                 int id = par.first;
                 cv::Point pos = par.second;
-                double dist = cv::norm(centro_atual - pos);
-                if (dist < menor_dist) { menor_dist = dist; id_associado = id; }
+                double dx = centro_atual.x - pos.x;
+                double dy = centro_atual.y - pos.y;
+                double dist = std::sqrt(dx * dx + dy * dy);
+
+                if (dist < menor_dist) {
+                    menor_dist = dist;
+                    id_associado = id;
+                }
             }
 
             if (id_associado != -1) {
@@ -193,7 +194,6 @@ int main() {
                 if (pos_anterior.y >= linha_contagem_y && centro_atual.y < linha_contagem_y && !objetos_contados[id_associado]) {
                     totalMoedas++;
                     objetos_contados[id_associado] = true;
-                    // A variável 'tipo' já foi calculada, não precisa recalcular
                     if (tipo != "X") {
                         contagemPorTipo[tipo]++;
                         if (tipo == "1c") valorTotalEuros += 0.01; else if (tipo == "2c") valorTotalEuros += 0.02;
@@ -211,36 +211,35 @@ int main() {
                     proximo_id_objeto++;
                 }
             }
-        }
+        } // --- FIM DO LOOP DE PROCESSAMENTO DE CONTORNOS ---
 
-        // Copia a imagem processada (com caixas desenhadas) para o frame a ser exibido
+        // --- 3. DESENHO FINAL E EXIBIÇÃO (UMA VEZ POR FRAME) ---
+
+        // Desenha a linha de contagem na imagem IVC
+        vc_draw_horizontal_line(imgVC, linha_contagem_y, 255, 0, 0);
+
+        // Copia a imagem processada (com todas as caixas e a linha) para o frame a ser exibido
         memcpy(frame.data, imgVC->data, largura * altura * 3);
 
-        // +++ SEGUNDO LOOP: DESENHO DE TEXTO CONDICIONAL +++
+        // Desenha o texto para cada blob válido
         for (size_t i = 0; i < blobs_validos.size(); i++) {
             OVC blob_info = blobs_validos[i];
             double area = areas_validas[i];
-
             std::string tipo = identificarMoeda(area, nomeVideo);
 
-            // +++ MUDANÇA 3: Apenas desenha o texto se for uma moeda válida +++
             if (tipo != "X") {
                 int y_pos_info = blob_info.y + 15;
                 int x_pos_info = blob_info.x + blob_info.width + 5;
-
                 std::string texto_pos = "x:" + std::to_string(blob_info.xc) + " y:" + std::to_string(blob_info.yc);
                 std::string texto_area = "Area:" + std::to_string(static_cast<int>(area));
                 std::string texto_tipo = "Tipo:" + tipo;
-
                 cv::putText(frame, texto_pos, cv::Point(x_pos_info, y_pos_info), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 1);
                 cv::putText(frame, texto_area, cv::Point(x_pos_info, y_pos_info + 15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 1);
                 cv::putText(frame, texto_tipo, cv::Point(x_pos_info, y_pos_info + 30), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 1);
             }
         }
 
-        // O resto do código para desenhar a linha e o painel de controlo continua igual
-        cv::line(frame, cv::Point(0, linha_contagem_y), cv::Point(largura, linha_contagem_y), cv::Scalar(0, 0, 255), 2);
-
+        // Desenha o painel de controlo
         int pos_y_painel = 30;
         for (const auto& par : contagemPorTipo) {
             std::string texto = par.first + ": " + std::to_string(par.second);
@@ -254,13 +253,16 @@ int main() {
         cv::putText(frame, texto_total, cv::Point(20, pos_y_painel + 10), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 0), 2);
         cv::putText(frame, texto_total, cv::Point(20, pos_y_painel + 10), cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 255), 1);
 
+        // Exibe as janelas
         cv::imshow("Resultado", frame);
         cv::imshow("Binária", binaria);
 
+        // Liberta a memória alocada para este frame
         vc_image_free(imgVC);
         vc_image_free(imgCinza);
         vc_image_free(imgBin);
 
+        // Espera por interação do utilizador
         tecla = cv::waitKey(100) & 0xFF;
         if (tecla == 'p') {
             while (true) {
@@ -271,7 +273,8 @@ int main() {
                 }
             }
         }
-    }
+    } // --- FIM DO LOOP WHILE ---
+
 
     ficheiroCSV.close();
 
