@@ -172,7 +172,6 @@ int blob_e_vermelho(IVC* img_colorida, OVC* blob_info) {
         for (x = blob_info->xc - half_roi; x <= blob_info->xc + half_roi; x++) {
             if (x >= 0 && x < img_colorida->width && y >= 0 && y < img_colorida->height) {
                 long int pos = y * img_colorida->bytesperline + x * img_colorida->channels;
-                // Lê na ordem BGR
                 sum_b += img_colorida->data[pos];
                 sum_g += img_colorida->data[pos + 1];
                 sum_r += img_colorida->data[pos + 2];
@@ -182,162 +181,128 @@ int blob_e_vermelho(IVC* img_colorida, OVC* blob_info) {
     }
 
     if (pixel_count == 0) return 0;
-
-    // Calcula a cor média e normaliza para o intervalo [0, 1]
+    
     float avg_r_norm = ((float)sum_r / pixel_count) / 255.0f;
     float avg_g_norm = ((float)sum_g / pixel_count) / 255.0f;
     float avg_b_norm = ((float)sum_b / pixel_count) / 255.0f;
 
-    // Converte a cor média RGB normalizada para HSV
     float h, s, v;
     float max, min, delta;
-
-    max = (avg_r_norm > avg_g_norm ? (avg_r_norm > avg_b_norm ? avg_r_norm : avg_b_norm) : (avg_g_norm > avg_b_norm ? avg_g_norm : avg_b_norm));
-    min = (avg_r_norm < avg_g_norm ? (avg_r_norm < avg_b_norm ? avg_r_norm : avg_b_norm) : (avg_g_norm < avg_b_norm ? avg_g_norm : avg_b_norm));
+    max = fmaxf(fmaxf(avg_r_norm, avg_g_norm), avg_b_norm);
+    min = fminf(fminf(avg_r_norm, avg_g_norm), avg_b_norm);
     delta = max - min;
-
-    v = max; // Value (Brilho)
-
-    if (max == 0.0f) {
-        s = 0.0f; // Saturation (Saturação)
-    }
+    v = max;
+    s = (max == 0.0f) ? 0.0f : delta / max;
+    if (s == 0.0f) { h = 0.0f; }
     else {
-        s = delta / max;
+        if (max == avg_r_norm) { h = 60.0f * fmodf(((avg_g_norm - avg_b_norm) / delta), 6.0f); }
+        else if (max == avg_g_norm) { h = 60.0f * (((avg_b_norm - avg_r_norm) / delta) + 2.0f); }
+        else { h = 60.0f * (((avg_r_norm - avg_g_norm) / delta) + 4.0f); }
+        if (h < 0.0f) { h += 360.0f; }
     }
-
-    if (s == 0.0f) {
-        h = 0.0f; // Hue (Matiz)
-    }
-    else {
-        if (max == avg_r_norm) {
-            h = 60.0f * fmodf(((avg_g_norm - avg_b_norm) / delta), 6.0f);
-        }
-        else if (max == avg_g_norm) {
-            h = 60.0f * (((avg_b_norm - avg_r_norm) / delta) + 2.0f);
-        }
-        else { // max == avg_b_norm
-            h = 60.0f * (((avg_r_norm - avg_g_norm) / delta) + 4.0f);
-        }
-        if (h < 0.0f) {
-            h += 360.0f;
-        }
-    }
-
-    // --- CONDIÇÃO DE VERIFICAÇÃO EM HSV ---
-    // O vermelho está nos extremos do círculo cromático (perto de 0 e perto de 360 graus)
+    
     int is_red = (h >= 0 && h <= 20) || (h >= 340 && h <= 360);
-    // A saturação tem que ser alta para não ser branco/cinzento
     int is_saturated = (s > 0.5f);
-    // O brilho não pode ser muito baixo (preto)
     int is_bright = (v > 0.3f);
-
-    if (is_red && is_saturated && is_bright) {
-        return 1; // É vermelho
-    }
-
-    return 0; // Não é vermelho
+    return (is_red && is_saturated && is_bright);
 }
 
 // =======================
 // Operações Morfológicas Binárias
 // =======================
-
-// Erosão binária
 int vc_binary_erode(IVC* src, IVC* dst, int kernel_size) {
     if (!src || !dst || !src->data || !dst->data) return 0;
     if (src->width != dst->width || src->height != dst->height || src->channels != 1 || dst->channels != 1) return 0;
     if (kernel_size < 1 || kernel_size % 2 == 0) return 0;
-
-    int width = src->width;
-    int height = src->height;
-    int bytesperline = src->bytesperline;
-    unsigned char* src_data = src->data;
-    unsigned char* dst_data = dst->data;
+    int width = src->width, height = src->height, bytesperline = src->bytesperline;
+    unsigned char* src_data = src->data; unsigned char* dst_data = dst->data;
     int half_kernel = kernel_size / 2;
-
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            unsigned char min_val_neighborhood = 255;
+    memcpy(dst->data, src->data, width * height);
+    for (int y = half_kernel; y < height - half_kernel; y++) {
+        for (int x = half_kernel; x < width - half_kernel; x++) {
+            unsigned char min_val = 255;
             for (int ky = -half_kernel; ky <= half_kernel; ky++) {
                 for (int kx = -half_kernel; kx <= half_kernel; kx++) {
-                    int ny = y + ky;
-                    int nx = x + kx;
-                    if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
-                        if (src_data[ny * bytesperline + nx] < min_val_neighborhood) {
-                            min_val_neighborhood = src_data[ny * bytesperline + nx];
-                        }
+                    if (src_data[(y + ky) * bytesperline + (x + kx)] < min_val) {
+                        min_val = src_data[(y + ky) * bytesperline + (x + kx)];
                     }
                 }
             }
-            dst_data[y * bytesperline + x] = min_val_neighborhood;
+            dst_data[y * bytesperline + x] = min_val;
         }
     }
     return 1;
 }
 
-// Dilatação binária
 int vc_binary_dilate(IVC* src, IVC* dst, int kernel_size) {
     if (!src || !dst || !src->data || !dst->data) return 0;
     if (src->width != dst->width || src->height != dst->height || src->channels != 1 || dst->channels != 1) return 0;
     if (kernel_size < 1 || kernel_size % 2 == 0) return 0;
-
-    int width = src->width;
-    int height = src->height;
-    int bytesperline = src->bytesperline;
-    unsigned char* src_data = src->data;
-    unsigned char* dst_data = dst->data;
+    int width = src->width, height = src->height, bytesperline = src->bytesperline;
+    unsigned char* src_data = src->data; unsigned char* dst_data = dst->data;
     int half_kernel = kernel_size / 2;
-
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            unsigned char max_val_neighborhood = 0;
+    memcpy(dst->data, src->data, width * height);
+    for (int y = half_kernel; y < height - half_kernel; y++) {
+        for (int x = half_kernel; x < width - half_kernel; x++) {
+            unsigned char max_val = 0;
             for (int ky = -half_kernel; ky <= half_kernel; ky++) {
                 for (int kx = -half_kernel; kx <= half_kernel; kx++) {
-                    int ny = y + ky;
-                    int nx = x + kx;
-                    if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
-                        if (src_data[ny * bytesperline + nx] > max_val_neighborhood) {
-                            max_val_neighborhood = src_data[ny * bytesperline + nx];
-                        }
+                    if (src_data[(y + ky) * bytesperline + (x + kx)] > max_val) {
+                        max_val = src_data[(y + ky) * bytesperline + (x + kx)];
                     }
                 }
             }
-            dst_data[y * bytesperline + x] = max_val_neighborhood;
+            dst_data[y * bytesperline + x] = max_val;
         }
     }
     return 1;
 }
 
-// Abertura binária (erosão seguida de dilatação)
 int vc_binary_open(IVC* src, IVC* dst, int kernel_size, IVC* temp) {
-    if (!src || !dst || !temp || !src->data || !dst->data || !temp->data) return 0;
-    if (src->width != temp->width || src->height != temp->height || src->channels != temp->channels) return 0;
-    if (temp->width != dst->width || temp->height != dst->height || temp->channels != dst->channels) return 0;
-
-    if (!vc_binary_erode(src, temp, kernel_size)) {
-        fprintf(stderr, "Erro: vc_binary_open falhou na erosao.\n");
-        return 0;
-    }
-    if (!vc_binary_dilate(temp, dst, kernel_size)) {
-        fprintf(stderr, "Erro: vc_binary_open falhou na dilatacao.\n");
-        return 0;
-    }
+    if (!vc_binary_erode(src, temp, kernel_size)) return 0;
+    if (!vc_binary_dilate(temp, dst, kernel_size)) return 0;
     return 1;
 }
 
-// Fecho binário (dilatação seguida de erosão)
 int vc_binary_close(IVC* src, IVC* dst, int kernel_size, IVC* temp) {
-    if (!src || !dst || !temp || !src->data || !dst->data || !temp->data) return 0;
-    if (src->width != temp->width || src->height != temp->height || src->channels != temp->channels) return 0;
-    if (temp->width != dst->width || temp->height != dst->height || temp->channels != dst->channels) return 0;
+    if (!vc_binary_dilate(src, temp, kernel_size)) return 0;
+    if (!vc_binary_erode(temp, dst, kernel_size)) return 0;
+    return 1;
+}
 
-    if (!vc_binary_dilate(src, temp, kernel_size)) {
-        fprintf(stderr, "Erro: vc_binary_close falhou na dilatacao.\n");
-        return 0;
-    }
-    if (!vc_binary_erode(temp, dst, kernel_size)) {
-        fprintf(stderr, "Erro: vc_binary_close falhou na erosao.\n");
-        return 0;
+// =======================
+// *** NOVA FUNÇÃO: Suavização (Box Blur) para Tons de Cinza ***
+// =======================
+int vc_gray_box_blur(IVC* src, IVC* dst, int kernel_size) {
+    if (!src || !dst || !src->data || !dst->data) return 0;
+    if (src->width != dst->width || src->height != dst->height || src->channels != 1 || dst->channels != 1) return 0;
+    if (kernel_size < 3 || kernel_size % 2 == 0) return 0;
+
+    int width = src->width;
+    int height = src->height;
+    unsigned char* src_data = src->data;
+    unsigned char* dst_data = dst->data;
+    int half_kernel = kernel_size / 2;
+    long long int sum;
+    int i, j, kx, ky;
+    
+    // Copia a imagem original para o destino para tratar das bordas
+    memcpy(dst_data, src_data, width * height);
+
+    // Itera sobre os píxeis internos da imagem (excluindo as bordas)
+    for (j = half_kernel; j < height - half_kernel; j++) {
+        for (i = half_kernel; i < width - half_kernel; i++) {
+            sum = 0;
+            // Itera sobre a vizinhança do kernel
+            for (ky = -half_kernel; ky <= half_kernel; ky++) {
+                for (kx = -half_kernel; kx <= half_kernel; kx++) {
+                    // Usa a imagem original (src_data) para os cálculos
+                    sum += src_data[(j + ky) * width + (i + kx)];
+                }
+            }
+            // Atribui a média ao píxel correspondente na imagem de destino
+            dst_data[j * width + i] = (unsigned char)(sum / (kernel_size * kernel_size));
+        }
     }
     return 1;
 }

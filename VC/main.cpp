@@ -8,11 +8,11 @@
 #include <iomanip>
 
 extern "C" {
-#include "Header.h" // Garanta que o nome do seu header está correto
+#include "Header.h" 
 }
 
 // Limiar para binarização da imagem em tons de cinza
-int limiarBinarizacao = 80;
+int limiarBinarizacao = 95;
 
 // Função para mostrar o tempo decorrido
 void mostrarTempo() {
