@@ -30,29 +30,23 @@ void mostrarTempo() {
     }
 }
 
-// Função para identificar o tipo de moeda
 std::string identificarMoeda(double area, const std::string& ficheiro) {
     std::string tipo = "X";
+
     if (ficheiro == "video1.mp4") {
-        if (area >= 2000 && area < 2900) tipo = "1c";
-        else if (area >= 2900 && area < 3000) tipo = "2c";
-        else if (area >= 3000 && area < 4000) tipo = "5c";
-        else if (area >= 4000 && area < 6000) tipo = "10c";
-        else if (area >= 6000 && area < 9000) tipo = "20c";
-        else if (area >= 11500 && area < 13000) tipo = "50c";
-        else if (area >= 9000 && area < 16000) tipo = "1euro";
-        else if (area >= 16000 && area < 17000) tipo = "2euro";
+        // Intervalos baseados na ordem de tamanho físico e nos dados observados
+        // NOTA: Devido à grande variação de área causada pela perspetiva,
+        // esta classificação pode não ser 100% precisa em todos os frames.
+        if (area >= 10000 && area < 12000) { tipo = "1c"; }
+        else if (area >= 12700 && area < 14850) { tipo = "2c"; }
+        else if (area >= 17600 && area < 19150) { tipo = "5c"; }
+        else if (area >= 14900 && area < 16500) { tipo = "10c"; }
+        else if (area >= 19250 && area < 20150) { tipo = "20c"; }
+        else if (area >= 23400 && area < 24900) { tipo = "50c"; }
+        else if (area >= 20151 && area < 40000) { tipo = "1euro"; }
+        else if (area >= 25200 && area < 31000) { tipo = "2euro"; }
     }
-    else if (ficheiro == "video2.mp4") {
-        if (area >= 2000 && area < 2600) tipo = "1c";
-        else if (area >= 2600 && area < 2900) tipo = "2c";
-        else if (area >= 2900 && area <= 3720) tipo = "5c";
-        else if (area > 3720 && area < 4500) tipo = "10c";
-        else if (area >= 4500 && area < 7800) tipo = "20c";
-        else if (area >= 7800 && area < 7930) tipo = "50c";
-        else if (area >= 7930 && area < 12000) tipo = "1euro";
-        else if (area >= 12000 && area < 15000) tipo = "2euro";
-    }
+
     return tipo;
 }
 
@@ -116,13 +110,28 @@ int main() {
         vc_rgb_to_gray(imgVC, imgCinza);
 
         IVC* imgBin = vc_image_new(largura, altura, 1, 255);
+        IVC* imgTemp = vc_image_new(largura, altura, 1, 255);
+
+        // Binarização e negativo
         vc_gray_to_binary(imgCinza, imgBin, limiarBinarizacao);
         vc_gray_negative(imgBin);
+
+        // Operação morfológica para melhorar o contorno
+        // Exemplo: abertura para remover ruído e fecho para fechar buracos
+        vc_binary_open(imgBin, imgBin, 3, imgTemp);   // kernel 3x3, ajusta se necessário
+        vc_binary_close(imgBin, imgBin, 3, imgTemp);  // kernel 3x3, ajusta se necessário
+
+        vc_image_free(imgTemp);
+
 
         cv::Mat binaria(altura, largura, CV_8UC1, imgBin->data);
         std::vector<std::vector<cv::Point>> contornos;
 
         cv::findContours(binaria, contornos, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+
+        // +++ Listas temporárias para guardar informações dos blobs válidos +++
+        std::vector<OVC> blobs_validos;
+        std::vector<double> areas_validas;
 
         for (const auto& contorno : contornos) {
             double area = cv::contourArea(contorno);
@@ -131,10 +140,17 @@ int main() {
             OVC blob_info = { 0 };
             calcularPropriedadesManualmente(contorno, blob_info);
 
-            cv::Point centro_atual(blob_info.xc, blob_info.yc);
+            if (blob_e_vermelho(imgVC, &blob_info)) {
+                continue;
+            }
 
+            blobs_validos.push_back(blob_info);
+            areas_validas.push_back(area);
+
+            cv::Point centro_atual(blob_info.xc, blob_info.yc);
             int id_associado = -1;
             double menor_dist = distMinima;
+
             for (auto const& par : objetos_rastreados) {
                 int id = par.first;
                 cv::Point pos = par.second;
@@ -167,40 +183,35 @@ int main() {
                 }
             }
 
-            // Desenho com a sua biblioteca na sua estrutura de imagem
             vc_draw_bounding_box(imgVC, &blob_info);
             vc_draw_center_of_gravity(imgVC, &blob_info, 5);
         }
 
-        // Depois de todos os desenhos da sua biblioteca estarem feitos na imgVC,
-        // copia-se o resultado para o frame do OpenCV.
         memcpy(frame.data, imgVC->data, largura * altura * 3);
 
-        // Agora, desenhamos os textos e a linha diretamente no frame do OpenCV.
-        // Isto garante que eles aparecem por cima de tudo.
-        cv::line(frame, cv::Point(0, linha_contagem_y), cv::Point(largura, linha_contagem_y), cv::Scalar(0, 0, 255), 2);
-
-        // Desenha as informações para cada blob novamente, mas desta vez no `frame` final
-        for (const auto& contorno : contornos) {
-            double area = cv::contourArea(contorno);
-            if (area < 1500) continue;
-            OVC blob_info = { 0 };
-            calcularPropriedadesManualmente(contorno, blob_info);
+        // +++ Segundo Loop: Desenha o texto de depuração para cada blob válido +++
+        for (size_t i = 0; i < blobs_validos.size(); i++) {
+            OVC blob_info = blobs_validos[i];
+            double area = areas_validas[i];
 
             std::string tipo = identificarMoeda(area, nomeVideo);
-            int y_pos_info = blob_info.y + 15; // Posição do texto
-            int x_pos_info = blob_info.x + blob_info.width + 5; // Posição à direita da caixa
+            int y_pos_info = blob_info.y + 15;
+            int x_pos_info = blob_info.x + blob_info.width + 5;
 
+            // Prepara os textos
             std::string texto_pos = "x:" + std::to_string(blob_info.xc) + " y:" + std::to_string(blob_info.yc);
             std::string texto_area = "Area:" + std::to_string(static_cast<int>(area));
             std::string texto_tipo = "Tipo:" + tipo;
 
+            // Desenha os textos no frame do OpenCV
             cv::putText(frame, texto_pos, cv::Point(x_pos_info, y_pos_info), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 1);
             cv::putText(frame, texto_area, cv::Point(x_pos_info, y_pos_info + 15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 1);
             cv::putText(frame, texto_tipo, cv::Point(x_pos_info, y_pos_info + 30), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 1);
         }
 
-        // Desenha o painel de controlo principal
+        // Desenha a linha e o painel de controlo principal
+        cv::line(frame, cv::Point(0, linha_contagem_y), cv::Point(largura, linha_contagem_y), cv::Scalar(0, 0, 255), 2);
+
         int pos_y_painel = 30;
         for (const auto& par : contagemPorTipo) {
             std::string texto = par.first + ": " + std::to_string(par.second);
@@ -222,6 +233,16 @@ int main() {
         vc_image_free(imgBin);
 
         tecla = cv::waitKey(100) & 0xFF;
+        if (tecla == 'p') {
+            // Pausa: espera até pressionar 'p' novamente ou 'q' para sair
+            while (true) {
+                int tecla_pausa = cv::waitKey(0) & 0xFF;
+                if (tecla_pausa == 'p' || tecla_pausa == 'q') {
+                    tecla = tecla_pausa;
+                    break;
+                }
+            }
+        }
     }
 
     ficheiroCSV.close();
