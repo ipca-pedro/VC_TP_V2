@@ -1,12 +1,22 @@
-#define _CRT_SECURE_NO_WARNINGS
+﻿#define _CRT_SECURE_NO_WARNINGS
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include "Header.h" // Garanta que o nome do seu header est� correto
+#include "Header.h" 
 
-// Alocar mem�ria para uma imagem
+/**
+ * Função: vc_image_new
+ * Descrição: Aloca memória para uma nova imagem IVC com as dimensões e parâmetros especificados.
+ * Parâmetros:
+ *   - width: largura da imagem
+ *   - height: altura da imagem
+ *   - channels: número de canais
+ *   - levels: número de níveis de intensidade
+ * Retorna: Ponteiro para a estrutura IVC criada, ou NULL em caso de erro.
+ */
 IVC* vc_image_new(int width, int height, int channels, int levels) {
+    // Aloca memória para a estrutura IVC
     IVC* image = (IVC*)malloc(sizeof(IVC));
     if (image == NULL) return NULL;
     image->width = width;
@@ -22,7 +32,13 @@ IVC* vc_image_new(int width, int height, int channels, int levels) {
     return image;
 }
 
-// Libertar mem�ria de uma imagem
+/**
+ * Função: vc_image_free
+ * Descrição: Liberta a memória alocada para uma imagem IVC.
+ * Parâmetros:
+ *   - image: ponteiro para a estrutura IVC a libertar
+ * Retorna: NULL após libertar a memória.
+ */
 IVC* vc_image_free(IVC* image) {
     if (image != NULL) {
         if (image->data != NULL) {
@@ -35,7 +51,14 @@ IVC* vc_image_free(IVC* image) {
     return image;
 }
 
-// Converter de RGB para Gray
+/**
+ * Função: vc_rgb_to_gray
+ * Descrição: Converte uma imagem RGB para tons de cinzento (grayscale).
+ * Parâmetros:
+ *   - src: ponteiro para a imagem de origem (RGB)
+ *   - dst: ponteiro para a imagem de destino (grayscale)
+ * Retorna: 1 em caso de sucesso, 0 em caso de erro.
+ */
 int vc_rgb_to_gray(IVC* src, IVC* dst) {
     unsigned char* datasrc = (unsigned char*)src->data;
     int bytesperline_src = src->bytesperline;
@@ -66,7 +89,15 @@ int vc_rgb_to_gray(IVC* src, IVC* dst) {
     return 1;
 }
 
-// Binariza��o
+/**
+ * Função: vc_gray_to_binary
+ * Descrição: Binariza uma imagem em tons de cinzento com base num limiar.
+ * Parâmetros:
+ *   - src: ponteiro para a imagem de origem (grayscale)
+ *   - dst: ponteiro para a imagem de destino (binária)
+ *   - threshold: valor de limiarização
+ * Retorna: 1 em caso de sucesso, 0 em caso de erro.
+ */
 int vc_gray_to_binary(IVC* src, IVC* dst, int threshold) {
     unsigned char* datasrc = (unsigned char*)src->data;
     unsigned char* datadst = (unsigned char*)dst->data;
@@ -87,7 +118,13 @@ int vc_gray_to_binary(IVC* src, IVC* dst, int threshold) {
     return 1;
 }
 
-// Gerar negativo da imagem gray
+/**
+ * Função: vc_gray_negative
+ * Descrição: Gera o negativo de uma imagem em tons de cinzento.
+ * Parâmetros:
+ *   - srcdst: ponteiro para a imagem a ser invertida (in-place)
+ * Retorna: 1 em caso de sucesso, 0 em caso de erro.
+ */
 int vc_gray_negative(IVC* srcdst) {
     unsigned char* data = (unsigned char*)srcdst->data;
     int size = srcdst->width * srcdst->height;
@@ -100,7 +137,14 @@ int vc_gray_negative(IVC* srcdst) {
     return 1;
 }
 
-// Desenha a bounding box de um blob
+/**
+ * Função: vc_draw_bounding_box
+ * Descrição: Desenha a caixa delimitadora (bounding box) de um blob numa imagem a cores.
+ * Parâmetros:
+ *   - img: ponteiro para a imagem de destino (BGR)
+ *   - blob: ponteiro para a estrutura OVC do blob
+ * Retorna: 1 em caso de sucesso, 0 em caso de erro.
+ */
 int vc_draw_bounding_box(IVC* img, OVC* blob) {
     if (!img || !blob || !img->data || img->channels != 3) return 0;
 
@@ -133,7 +177,15 @@ int vc_draw_bounding_box(IVC* img, OVC* blob) {
     return 1;
 }
 
-// Desenha o centro de gravidade de um blob
+/**
+ * Função: vc_draw_center_of_gravity
+ * Descrição: Desenha o centro de gravidade de um blob numa imagem a cores.
+ * Parâmetros:
+ *   - img: ponteiro para a imagem de destino (BGR)
+ *   - blob: ponteiro para a estrutura OVC do blob
+ *   - size: tamanho da cruz desenhada
+ * Retorna: 1 em caso de sucesso, 0 em caso de erro.
+ */
 int vc_draw_center_of_gravity(IVC* img, OVC* blob, int size) {
     if (!img || !blob || !img->data || img->channels != 3) return 0;
 
@@ -156,12 +208,21 @@ int vc_draw_center_of_gravity(IVC* img, OVC* blob, int size) {
     return 1;
 }
 
+/**
+ * Função: blob_e_cor_a_descartar
+ * Descrição: Determina se o blob deve ser descartado com base na sua cor média (em HSV).
+ * Parâmetros:
+ *   - img_colorida: ponteiro para a imagem a cores
+ *   - blob_info: ponteiro para a estrutura OVC do blob
+ *   - ficheiro: nome do ficheiro de vídeo em análise
+ * Retorna: 1 se a cor for a descartar, 0 caso contrário.
+ */
 int blob_e_cor_a_descartar(IVC* img_colorida, OVC* blob_info, const char* ficheiro) {
     if (!img_colorida || !blob_info || !img_colorida->data || img_colorida->channels != 3) {
         return 0;
     }
 
-    // --- Parte de amostragem e convers�o para HSV (n�o muda) ---
+    // --- Parte de amostragem e conversão para HSV (não muda) ---
     int roi_size = 5;
     int half_roi = roi_size / 2;
     long long sum_r = 0, sum_g = 0, sum_b = 0;
@@ -197,22 +258,22 @@ int blob_e_cor_a_descartar(IVC* img_colorida, OVC* blob_info, const char* fichei
         else { h = 60.0f * (((avg_r_norm - avg_g_norm) / delta) + 4.0f); }
         if (h < 0.0f) { h += 360.0f; }
     }
- 
 
-    // +++ L�GICA PARA DESCARTAR CORES +++
+
+    // +++ Lógica para descartar cores +++
     int e_vermelho = (h >= 340 || h <= 20) && (s > 0.5f) && (v > 0.3f);
     int e_verde = (h >= 75 && h <= 175) && (s > 0.35f) && (v > 0.20f);
     int e_azul = (h >= 180 && h <= 280) && (s > 0.4f) && (v > 0.3f);
     int e_amarelo = (h >= 45 && h <= 75) && (s > 0.6f) && (v > 0.5f);
 
-    // +++ FILTRO DE PRETO DIN�MICO +++
-    int e_preto = 0; // Por defeito, n�o descarta preto
+    // +++ FILTRO DE PRETO DINâmICO +++
+    int e_preto = 0; // Por defeito, nao descarta preto
     if (strcmp(ficheiro, "video1.mp4") == 0) {
-        // Para o v�deo 1, um filtro de preto MUITO tolerante para n�o apanhar a moeda de 1 euro.
+        // Para o v́deo 1, um filtro de preto MUITO tolerante para nao apanhar a moeda de 1 euro.
         e_preto = v < 0.12f;
     }
     else if (strcmp(ficheiro, "video2.mp4") == 0) {
-        // Para o v�deo 2
+        // Para o v́deo 2
         e_preto = v < 0.20f;
     }
 
@@ -223,9 +284,19 @@ int blob_e_cor_a_descartar(IVC* img_colorida, OVC* blob_info, const char* fichei
 
 
 
-// =======================
-// Opera��es Morfol�gicas Bin�rias
-// =======================
+/* ============================================================================
+ * Operações Morfológicas Binárias
+ * ==========================================================================*/
+
+ /**
+  * Função: vc_binary_erode
+  * Descrição: Realiza a operação de erosão binária numa imagem binária.
+  * Parâmetros:
+  *   - src: ponteiro para a imagem de origem (binária)
+  *   - dst: ponteiro para a imagem de destino (binária)
+  *   - kernel_size: tamanho do kernel (ímpar)
+  * Retorna: 1 em caso de sucesso, 0 em caso de erro.
+  */
 int vc_binary_erode(IVC* src, IVC* dst, int kernel_size) {
     if (!src || !dst || !src->data || !dst->data) return 0;
     if (src->width != dst->width || src->height != dst->height || src->channels != 1 || dst->channels != 1) return 0;
@@ -250,6 +321,15 @@ int vc_binary_erode(IVC* src, IVC* dst, int kernel_size) {
     return 1;
 }
 
+/**
+ * Função: vc_binary_dilate
+ * Descrição: Realiza a operação de dilatação binária numa imagem binária.
+ * Parâmetros:
+ *   - src: ponteiro para a imagem de origem (binária)
+ *   - dst: ponteiro para a imagem de destino (binária)
+ *   - kernel_size: tamanho do kernel (ímpar)
+ * Retorna: 1 em caso de sucesso, 0 em caso de erro.
+ */
 int vc_binary_dilate(IVC* src, IVC* dst, int kernel_size) {
     if (!src || !dst || !src->data || !dst->data) return 0;
     if (src->width != dst->width || src->height != dst->height || src->channels != 1 || dst->channels != 1) return 0;
@@ -274,21 +354,49 @@ int vc_binary_dilate(IVC* src, IVC* dst, int kernel_size) {
     return 1;
 }
 
+/**
+ * Função: vc_binary_open
+ * Descrição: Realiza a operação de abertura binária (erode seguido de dilate).
+ * Parâmetros:
+ *   - src: ponteiro para a imagem de origem (binária)
+ *   - dst: ponteiro para a imagem de destino (binária)
+ *   - kernel_size: tamanho do kernel (ímpar)
+ *   - temp: imagem temporária auxiliar
+ * Retorna: 1 em caso de sucesso, 0 em caso de erro.
+ */
 int vc_binary_open(IVC* src, IVC* dst, int kernel_size, IVC* temp) {
     if (!vc_binary_erode(src, temp, kernel_size)) return 0;
     if (!vc_binary_dilate(temp, dst, kernel_size)) return 0;
     return 1;
 }
 
+/**
+ * Função: vc_binary_close
+ * Descrição: Realiza a operação de fecho binário (dilate seguido de erode).
+ * Parâmetros:
+ *   - src: ponteiro para a imagem de origem (binária)
+ *   - dst: ponteiro para a imagem de destino (binária)
+ *   - kernel_size: tamanho do kernel (ímpar)
+ *   - temp: imagem temporária auxiliar
+ * Retorna: 1 em caso de sucesso, 0 em caso de erro.
+ */
 int vc_binary_close(IVC* src, IVC* dst, int kernel_size, IVC* temp) {
     if (!vc_binary_dilate(src, temp, kernel_size)) return 0;
     if (!vc_binary_erode(temp, dst, kernel_size)) return 0;
     return 1;
 }
 
-// =======================
-// *** NOVA FUN��O: Suaviza��o (Box Blur) para Tons de Cinza ***
-// =======================
+
+
+ /**
+  * Função: vc_gray_box_blur
+  * Descrição: Aplica um filtro de suavização (box blur) a uma imagem em tons de cinzento.
+  * Parâmetros:
+  *   - src: ponteiro para a imagem de origem (grayscale)
+  *   - dst: ponteiro para a imagem de destino (grayscale)
+  *   - kernel_size: tamanho do kernel (ímpar >= 3)
+  * Retorna: 1 em caso de sucesso, 0 em caso de erro.
+  */
 int vc_gray_box_blur(IVC* src, IVC* dst, int kernel_size) {
     if (!src || !dst || !src->data || !dst->data) return 0;
     if (src->width != dst->width || src->height != dst->height || src->channels != 1 || dst->channels != 1) return 0;
@@ -301,22 +409,22 @@ int vc_gray_box_blur(IVC* src, IVC* dst, int kernel_size) {
     int half_kernel = kernel_size / 2;
     long long int sum;
     int i, j, kx, ky;
-    
+
     // Copia a imagem original para o destino para tratar das bordas
     memcpy(dst_data, src_data, width * height);
 
-    // Itera sobre os p�xeis internos da imagem (excluindo as bordas)
+    // Itera sobre os píxeis internos da imagem (excluindo as bordas)
     for (j = half_kernel; j < height - half_kernel; j++) {
         for (i = half_kernel; i < width - half_kernel; i++) {
             sum = 0;
-            // Itera sobre a vizinhan�a do kernel
+            // Itera sobre a vizinhança do kernel
             for (ky = -half_kernel; ky <= half_kernel; ky++) {
                 for (kx = -half_kernel; kx <= half_kernel; kx++) {
-                    // Usa a imagem original (src_data) para os c�lculos
+                    // Usa a imagem original (src_data) para os cálculos
                     sum += src_data[(j + ky) * width + (i + kx)];
                 }
             }
-            // Atribui a m�dia ao p�xel correspondente na imagem de destino
+            // Atribui a média ao píxel correspondente na imagem de destino
             dst_data[j * width + i] = (unsigned char)(sum / (kernel_size * kernel_size));
         }
     }
@@ -325,20 +433,31 @@ int vc_gray_box_blur(IVC* src, IVC* dst, int kernel_size) {
 }
 
 
+/**
+ * Função: vc_draw_horizontal_line
+ * Descrição: Desenha uma linha horizontal numa imagem a cores (BGR) na linha y especificada.
+ * Parâmetros:
+ *   - img: ponteiro para a imagem de destino (BGR)
+ *   - y: coordenada vertical da linha
+ *   - r: valor do canal vermelho
+ *   - g: valor do canal verde
+ *   - b: valor do canal azul
+ * Retorna: 1 em caso de sucesso, 0 em caso de erro.
+ */
 int vc_draw_horizontal_line(IVC* img, int y, int r, int g, int b)
 {
-    // Valida��o de seguran�a: verifica se a imagem e os dados s�o v�lidos
-    // e se a linha est� dentro dos limites da altura da imagem.
+    // Validação de segurança: verifica se a imagem e os dados são válidos
+    // e se a linha está dentro dos limites da altura da imagem.
     if (!img || !img->data || img->channels != 3 || y < 0 || y >= img->height) {
         return 0; // Retorna 0 em caso de erro
     }
 
-    // Itera por todos os p�xeis da largura da imagem (de x=0 at� width-1)
+    // Itera por todos os píxeis da largura da imagem (de x=0 até width-1)
     for (int x = 0; x < img->width; x++) {
-        // Calcula a posi��o do p�xel na mem�ria (array 1D)
+        // Calcula a posição do píxel na memória (array 1D)
         long int pos = y * img->bytesperline + x * img->channels;
 
-        // Define a cor do p�xel. Lembre-se que OpenCV usa a ordem BGR.
+        // Define a cor do píxel. Lembre-se que OpenCV usa a ordem BGR.
         img->data[pos] = b; // Canal Azul (Blue)
         img->data[pos + 1] = g; // Canal Verde (Green)
         img->data[pos + 2] = r; // Canal Vermelho (Red)

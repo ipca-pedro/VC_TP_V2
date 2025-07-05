@@ -1,4 +1,4 @@
-#include <opencv2/opencv.hpp>
+Ôªø#include <opencv2/opencv.hpp>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -11,7 +11,12 @@ extern "C" {
 #include "Header.h" 
 }
 
-// FunÁ„o para mostrar o tempo decorrido
+/**
+ * Fun√ß√£o: mostrarTempo
+ * Descri√ß√£o: Mostra o tempo decorrido desde a √∫ltima chamada e pede intera√ß√£o do utilizador.
+ * Par√¢metros: Nenhum
+ * Retorna: void
+ */
 void mostrarTempo() {
     static bool iniciou = false;
     static auto tempoAnterior = std::chrono::steady_clock::now();
@@ -27,10 +32,18 @@ void mostrarTempo() {
     }
 }
 
+/**
+ * Fun√ß√£o: identificarMoeda
+ * Descri√ß√£o: Identifica o tipo de moeda com base na √°rea detetada e no ficheiro de v√≠deo.
+ * Par√¢metros:
+ *   - area: √°rea do blob
+ *   - ficheiro: nome do ficheiro de v√≠deo
+ * Retorna: string com o tipo de moeda identificado.
+ */
 std::string identificarMoeda(double area, const std::string& ficheiro) {
     std::string tipo = "X";
 
-    // --- Regras de ¡rea para o video1.mp4 ---
+    // --- Regras de area para o video1.mp4 ---
     if (ficheiro == "video1.mp4") {
         if (area >= 10600 && area < 11400) { tipo = "1c"; }
         else if (area >= 13800 && area < 14850) { tipo = "2c"; }
@@ -41,7 +54,7 @@ std::string identificarMoeda(double area, const std::string& ficheiro) {
         else if (area >= 20500 && area < 22300) { tipo = "1euro"; }
         else if (area >= 26200 && area < 27300) { tipo = "2euro"; }
     }
-    // --- Regras de ¡rea para o video2.mp4 ---
+    // --- Regras de area para o video2.mp4 ---
     else if (ficheiro == "video2.mp4") {
         if (area >= 10000 && area < 12100) { tipo = "1c"; }
         else if (area >= 13400 && area < 15090) { tipo = "2c"; }
@@ -56,7 +69,14 @@ std::string identificarMoeda(double area, const std::string& ficheiro) {
     return tipo;
 }
 
-// FunÁ„o auxiliar para calcular manualmente as propriedades do blob
+/**
+ * Fun√ß√£o: calcularPropriedadesManualmente
+ * Descri√ß√£o: Calcula manualmente bounding box e centro de gravidade de um contorno.
+ * Par√¢metros:
+ *   - contorno: vetor de pontos do contorno
+ *   - blob_info: refer√™ncia para estrutura OVC a preencher
+ * Retorna: void
+ */
 void calcularPropriedadesManualmente(const std::vector<cv::Point>& contorno, OVC& blob_info) {
     if (contorno.empty()) return;
     int min_x = contorno[0].x, max_x = contorno[0].x;
@@ -73,6 +93,12 @@ void calcularPropriedadesManualmente(const std::vector<cv::Point>& contorno, OVC
     blob_info.yc = static_cast<int>(sum_y / contorno.size());
 }
 
+/**
+ * Fun√ß√£o principal (main)
+ * Descri√ß√£o: Executa o ciclo principal do projeto de Vis√£o Computacional.
+ * Respons√°vel por processar v√≠deo, identificar, contar e mostrar moedas.
+ * Retorna: 0 em caso de sucesso, 1 em caso de erro.
+ */
 int main()
 {
     std::string nomeVideo = "video1.mp4";
@@ -89,14 +115,14 @@ int main()
     cv::VideoCapture video(nomeVideo);
 
     if (!video.isOpened()) {
-        std::cerr << "N„o foi possÌvel abrir o vÌdeo.\n"; return 1;
+        std::cerr << "Nao foi possivel abrir o video.\n"; return 1;
     }
 
     int largura = static_cast<int>(video.get(cv::CAP_PROP_FRAME_WIDTH));
     int altura = static_cast<int>(video.get(cv::CAP_PROP_FRAME_HEIGHT));
 
     cv::namedWindow("Resultado", cv::WINDOW_AUTOSIZE);
-    cv::namedWindow("Bin·ria", cv::WINDOW_AUTOSIZE);
+    cv::namedWindow("Binaria", cv::WINDOW_AUTOSIZE);
     mostrarTempo();
 
     std::ofstream ficheiroCSV("moedas_stats.csv");
@@ -119,7 +145,7 @@ int main()
         video >> frame;
         if (frame.empty()) break;
 
-        // --- 1. PREPARA«√O (UMA VEZ POR FRAME) ---
+        // --- 1. PREPARACAO (UMA VEZ POR FRAME) ---
         IVC* imgVC = vc_image_new(largura, altura, 3, 255);
         memcpy(imgVC->data, frame.data, largura * altura * 3);
 
@@ -170,7 +196,7 @@ int main()
                 vc_draw_center_of_gravity(imgVC, &blob_info, 5);
             }
 
-            // --- L”GICA DE RASTREAMENTO (PARA ESTE CONTORNO) ---
+            // --- LOGICA DE RASTREAMENTO (PARA ESTE CONTORNO) ---
             cv::Point centro_atual(blob_info.xc, blob_info.yc);
             int id_associado = -1;
             double menor_dist = distMinima;
@@ -213,7 +239,7 @@ int main()
             }
         } // --- FIM DO LOOP DE PROCESSAMENTO DE CONTORNOS ---
 
-        // --- 3. DESENHO FINAL E EXIBI«√O (UMA VEZ POR FRAME) ---
+        // --- 3. DESENHO FINAL E EXIBICAO (UMA VEZ POR FRAME) ---
 
         // Desenha a linha de contagem na imagem IVC
         vc_draw_horizontal_line(imgVC, linha_contagem_y, 255, 0, 0);
@@ -221,7 +247,7 @@ int main()
         // Copia a imagem processada (com todas as caixas e a linha) para o frame a ser exibido
         memcpy(frame.data, imgVC->data, largura * altura * 3);
 
-        // Desenha o texto para cada blob v·lido
+        // Desenha o texto para cada blob vÔøΩlido
         for (size_t i = 0; i < blobs_validos.size(); i++) {
             OVC blob_info = blobs_validos[i];
             double area = areas_validas[i];
@@ -255,14 +281,14 @@ int main()
 
         // Exibe as janelas
         cv::imshow("Resultado", frame);
-        cv::imshow("Bin·ria", binaria);
+        cv::imshow("Binaria", binaria);
 
-        // Liberta a memÛria alocada para este frame
+        // Liberta a memria alocada para este frame
         vc_image_free(imgVC);
         vc_image_free(imgCinza);
         vc_image_free(imgBin);
 
-        // Espera por interaÁ„o do utilizador
+        // Espera por interacÔøΩÔøΩo do utilizador
         tecla = cv::waitKey(100) & 0xFF;
         if (tecla == 'p') {
             while (true) {
