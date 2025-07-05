@@ -156,20 +156,18 @@ int vc_draw_center_of_gravity(IVC* img, OVC* blob, int size) {
     return 1;
 }
 
-// Função para verificar se um blob é vermelho. Retorna 1 se for vermelho, 0 caso contrário.
-int blob_e_vermelho(IVC* img_colorida, OVC* blob_info) {
+int blob_e_cor_a_descartar(IVC* img_colorida, OVC* blob_info, const char* ficheiro) {
     if (!img_colorida || !blob_info || !img_colorida->data || img_colorida->channels != 3) {
         return 0;
     }
 
+    // --- Parte de amostragem e conversão para HSV (não muda) ---
     int roi_size = 5;
     int half_roi = roi_size / 2;
     long long sum_r = 0, sum_g = 0, sum_b = 0;
     int pixel_count = 0;
-    int x, y;
-
-    for (y = blob_info->yc - half_roi; y <= blob_info->yc + half_roi; y++) {
-        for (x = blob_info->xc - half_roi; x <= blob_info->xc + half_roi; x++) {
+    for (int y = blob_info->yc - half_roi; y <= blob_info->yc + half_roi; y++) {
+        for (int x = blob_info->xc - half_roi; x <= blob_info->xc + half_roi; x++) {
             if (x >= 0 && x < img_colorida->width && y >= 0 && y < img_colorida->height) {
                 long int pos = y * img_colorida->bytesperline + x * img_colorida->channels;
                 sum_b += img_colorida->data[pos];
@@ -181,16 +179,15 @@ int blob_e_vermelho(IVC* img_colorida, OVC* blob_info) {
     }
 
     if (pixel_count == 0) return 0;
-    
+
     float avg_r_norm = ((float)sum_r / pixel_count) / 255.0f;
     float avg_g_norm = ((float)sum_g / pixel_count) / 255.0f;
     float avg_b_norm = ((float)sum_b / pixel_count) / 255.0f;
 
     float h, s, v;
-    float max, min, delta;
-    max = fmaxf(fmaxf(avg_r_norm, avg_g_norm), avg_b_norm);
-    min = fminf(fminf(avg_r_norm, avg_g_norm), avg_b_norm);
-    delta = max - min;
+    float max = fmaxf(fmaxf(avg_r_norm, avg_g_norm), avg_b_norm);
+    float min = fminf(fminf(avg_r_norm, avg_g_norm), avg_b_norm);
+    float delta = max - min;
     v = max;
     s = (max == 0.0f) ? 0.0f : delta / max;
     if (s == 0.0f) { h = 0.0f; }
@@ -200,12 +197,31 @@ int blob_e_vermelho(IVC* img_colorida, OVC* blob_info) {
         else { h = 60.0f * (((avg_r_norm - avg_g_norm) / delta) + 4.0f); }
         if (h < 0.0f) { h += 360.0f; }
     }
-    
-    int is_red = (h >= 0 && h <= 20) || (h >= 340 && h <= 360);
-    int is_saturated = (s > 0.5f);
-    int is_bright = (v > 0.3f);
-    return (is_red && is_saturated && is_bright);
+ 
+
+    // +++ LÓGICA PARA DESCARTAR CORES +++
+    int e_vermelho = (h >= 340 || h <= 20) && (s > 0.5f) && (v > 0.3f);
+    int e_verde = (h >= 75 && h <= 175) && (s > 0.35f) && (v > 0.20f);
+    int e_azul = (h >= 180 && h <= 280) && (s > 0.4f) && (v > 0.3f);
+    int e_amarelo = (h >= 45 && h <= 75) && (s > 0.6f) && (v > 0.5f);
+
+    // +++ FILTRO DE PRETO DINÂMICO +++
+    int e_preto = 0; // Por defeito, não descarta preto
+    if (strcmp(ficheiro, "video1.mp4") == 0) {
+        // Para o vídeo 1, um filtro de preto MUITO tolerante para não apanhar a moeda de 1 euro.
+        e_preto = v < 0.12f;
+    }
+    else if (strcmp(ficheiro, "video2.mp4") == 0) {
+        // Para o vídeo 2
+        e_preto = v < 0.20f;
+    }
+
+    return (e_vermelho || e_verde || e_azul || e_amarelo || e_preto);
 }
+
+
+
+
 
 // =======================
 // Operações Morfológicas Binárias

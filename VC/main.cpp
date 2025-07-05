@@ -11,9 +11,6 @@ extern "C" {
 #include "Header.h" 
 }
 
-// Limiar para binarização da imagem em tons de cinza
-int limiarBinarizacao = 95;
-
 // Função para mostrar o tempo decorrido
 void mostrarTempo() {
     static bool iniciou = false;
@@ -33,18 +30,27 @@ void mostrarTempo() {
 std::string identificarMoeda(double area, const std::string& ficheiro) {
     std::string tipo = "X";
 
+    // --- Regras de Área para o video1.mp4 ---
     if (ficheiro == "video1.mp4") {
-        // Intervalos baseados na ordem de tamanho físico e nos dados observados
-        // NOTA: Devido à grande variação de área causada pela perspetiva,
-        // esta classificação pode não ser 100% precisa em todos os frames.
-        if (area >= 10000 && area < 12000) { tipo = "1c"; }
-        else if (area >= 12700 && area < 14850) { tipo = "2c"; }
-        else if (area >= 17600 && area < 19150) { tipo = "5c"; }
-        else if (area >= 14900 && area < 16500) { tipo = "10c"; }
-        else if (area >= 19250 && area < 20150) { tipo = "20c"; }
-        else if (area >= 23400 && area < 24900) { tipo = "50c"; }
-        else if (area >= 20151 && area < 40000) { tipo = "1euro"; }
-        else if (area >= 25200 && area < 31000) { tipo = "2euro"; }
+        if (area >= 10600 && area < 11400) { tipo = "1c"; }
+        else if (area >= 13800 && area < 14850) { tipo = "2c"; }
+        else if (area >= 17800 && area < 18900) { tipo = "5c"; }
+        else if (area >= 14800 && area < 15800) { tipo = "10c"; }
+        else if (area >= 18500 && area < 20000) { tipo = "20c"; }
+        else if (area >= 23300 && area < 24300) { tipo = "50c"; }
+        else if (area >= 20500 && area < 22300) { tipo = "1euro"; }
+        else if (area >= 26200 && area < 27300) { tipo = "2euro"; }
+    }
+    // --- Regras de Área para o video2.mp4 ---
+    else if (ficheiro == "video2.mp4") {
+        if (area >= 10000 && area < 12100) { tipo = "1c"; }
+        else if (area >= 13400 && area < 15090) { tipo = "2c"; }
+        else if (area >= 17100 && area < 19500) { tipo = "5c"; }
+        else if (area >= 15100 && area < 17000) { tipo = "10c"; }
+        else if (area >= 19600 && area < 21900) { tipo = "20c"; }
+        else if (area >= 23700 && area < 26000) { tipo = "50c"; }
+        else if (area >= 22000 && area < 23600) { tipo = "1euro"; }
+        else if (area >= 27000 && area < 28200) { tipo = "2euro"; }
     }
 
     return tipo;
@@ -69,6 +75,15 @@ void calcularPropriedadesManualmente(const std::vector<cv::Point>& contorno, OVC
 
 int main() {
     std::string nomeVideo = "video1.mp4";
+    int limiarBinarizacao;
+
+    if (nomeVideo == "video1.mp4") {
+        limiarBinarizacao = 95;
+    }
+    else if (nomeVideo == "video2.mp4") {
+        limiarBinarizacao = 120;
+    }
+
     int distMinima = 40;
     cv::VideoCapture video(nomeVideo);
 
@@ -112,27 +127,20 @@ int main() {
         IVC* imgBin = vc_image_new(largura, altura, 1, 255);
         IVC* imgTemp = vc_image_new(largura, altura, 1, 255);
 
-        // Binarização e negativo
         vc_gray_to_binary(imgCinza, imgBin, limiarBinarizacao);
         vc_gray_negative(imgBin);
-
-        // Operação morfológica para melhorar o contorno
-        // Exemplo: abertura para remover ruído e fecho para fechar buracos
-        vc_binary_open(imgBin, imgBin, 3, imgTemp);   // kernel 3x3, ajusta se necessário
-        vc_binary_close(imgBin, imgBin, 3, imgTemp);  // kernel 3x3, ajusta se necessário
-
+        vc_binary_open(imgBin, imgBin, 3, imgTemp);
+        vc_binary_close(imgBin, imgBin, 3, imgTemp);
         vc_image_free(imgTemp);
-
 
         cv::Mat binaria(altura, largura, CV_8UC1, imgBin->data);
         std::vector<std::vector<cv::Point>> contornos;
-
         cv::findContours(binaria, contornos, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-        // +++ Listas temporárias para guardar informações dos blobs válidos +++
         std::vector<OVC> blobs_validos;
         std::vector<double> areas_validas;
 
+        // +++ PRIMEIRO LOOP: FILTRAGEM E PROCESSAMENTO DE DADOS +++
         for (const auto& contorno : contornos) {
             double area = cv::contourArea(contorno);
             if (area < 1500) continue;
@@ -140,13 +148,34 @@ int main() {
             OVC blob_info = { 0 };
             calcularPropriedadesManualmente(contorno, blob_info);
 
-            if (blob_e_vermelho(imgVC, &blob_info)) {
+            // Passa o nome do vídeo para a função de descarte de cor
+            if (blob_e_cor_a_descartar(imgVC, &blob_info, nomeVideo.c_str())) {
                 continue;
             }
 
+            // +++ MUDANÇA 1: Filtro de Relação de Aspeto (Aspect Ratio) +++
+            float aspect_ratio = (float)blob_info.width / (float)blob_info.height;
+            // Normaliza para estar sempre <= 1 (ex: 1.25 vira 0.8)
+            if (aspect_ratio > 1.0f) aspect_ratio = 1.0f / aspect_ratio;
+            // Se o objeto for muito "esticado" (não for quadrado/redondo), ignora-o.
+            if (aspect_ratio < 0.75f) {
+                continue;
+            }
+
+            // O objeto passou em todos os filtros, agora podemos processá-lo.
             blobs_validos.push_back(blob_info);
             areas_validas.push_back(area);
 
+            // +++ MUDANÇA 2: Identifica o tipo ANTES de desenhar +++
+            std::string tipo = identificarMoeda(area, nomeVideo);
+
+            // Apenas desenha a caixa e o centro de gravidade se for uma moeda válida
+            if (tipo != "X") {
+                vc_draw_bounding_box(imgVC, &blob_info);
+                vc_draw_center_of_gravity(imgVC, &blob_info, 5);
+            }
+
+            // Lógica de rastreio continua igual
             cv::Point centro_atual(blob_info.xc, blob_info.yc);
             int id_associado = -1;
             double menor_dist = distMinima;
@@ -164,7 +193,7 @@ int main() {
                 if (pos_anterior.y >= linha_contagem_y && centro_atual.y < linha_contagem_y && !objetos_contados[id_associado]) {
                     totalMoedas++;
                     objetos_contados[id_associado] = true;
-                    std::string tipo = identificarMoeda(area, nomeVideo);
+                    // A variável 'tipo' já foi calculada, não precisa recalcular
                     if (tipo != "X") {
                         contagemPorTipo[tipo]++;
                         if (tipo == "1c") valorTotalEuros += 0.01; else if (tipo == "2c") valorTotalEuros += 0.02;
@@ -182,34 +211,34 @@ int main() {
                     proximo_id_objeto++;
                 }
             }
-
-            vc_draw_bounding_box(imgVC, &blob_info);
-            vc_draw_center_of_gravity(imgVC, &blob_info, 5);
         }
 
+        // Copia a imagem processada (com caixas desenhadas) para o frame a ser exibido
         memcpy(frame.data, imgVC->data, largura * altura * 3);
 
-        // +++ Segundo Loop: Desenha o texto de depuração para cada blob válido +++
+        // +++ SEGUNDO LOOP: DESENHO DE TEXTO CONDICIONAL +++
         for (size_t i = 0; i < blobs_validos.size(); i++) {
             OVC blob_info = blobs_validos[i];
             double area = areas_validas[i];
 
             std::string tipo = identificarMoeda(area, nomeVideo);
-            int y_pos_info = blob_info.y + 15;
-            int x_pos_info = blob_info.x + blob_info.width + 5;
 
-            // Prepara os textos
-            std::string texto_pos = "x:" + std::to_string(blob_info.xc) + " y:" + std::to_string(blob_info.yc);
-            std::string texto_area = "Area:" + std::to_string(static_cast<int>(area));
-            std::string texto_tipo = "Tipo:" + tipo;
+            // +++ MUDANÇA 3: Apenas desenha o texto se for uma moeda válida +++
+            if (tipo != "X") {
+                int y_pos_info = blob_info.y + 15;
+                int x_pos_info = blob_info.x + blob_info.width + 5;
 
-            // Desenha os textos no frame do OpenCV
-            cv::putText(frame, texto_pos, cv::Point(x_pos_info, y_pos_info), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 1);
-            cv::putText(frame, texto_area, cv::Point(x_pos_info, y_pos_info + 15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 1);
-            cv::putText(frame, texto_tipo, cv::Point(x_pos_info, y_pos_info + 30), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 1);
+                std::string texto_pos = "x:" + std::to_string(blob_info.xc) + " y:" + std::to_string(blob_info.yc);
+                std::string texto_area = "Area:" + std::to_string(static_cast<int>(area));
+                std::string texto_tipo = "Tipo:" + tipo;
+
+                cv::putText(frame, texto_pos, cv::Point(x_pos_info, y_pos_info), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 1);
+                cv::putText(frame, texto_area, cv::Point(x_pos_info, y_pos_info + 15), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 1);
+                cv::putText(frame, texto_tipo, cv::Point(x_pos_info, y_pos_info + 30), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 0), 1);
+            }
         }
 
-        // Desenha a linha e o painel de controlo principal
+        // O resto do código para desenhar a linha e o painel de controlo continua igual
         cv::line(frame, cv::Point(0, linha_contagem_y), cv::Point(largura, linha_contagem_y), cv::Scalar(0, 0, 255), 2);
 
         int pos_y_painel = 30;
@@ -234,7 +263,6 @@ int main() {
 
         tecla = cv::waitKey(100) & 0xFF;
         if (tecla == 'p') {
-            // Pausa: espera até pressionar 'p' novamente ou 'q' para sair
             while (true) {
                 int tecla_pausa = cv::waitKey(0) & 0xFF;
                 if (tecla_pausa == 'p' || tecla_pausa == 'q') {
