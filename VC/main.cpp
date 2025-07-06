@@ -97,7 +97,7 @@ void calcularPropriedadesBlobManualmente(const std::vector<cv::Point>& contorno,
  */
 int main() {
     // --- Configurações Iniciais ---
-    std::string nome_video = "video2.mp4";
+    std::string nome_video = "video1.mp4";
     int limiar_binarizacao;
 
     if (nome_video == "video1.mp4") {
@@ -116,11 +116,6 @@ int main() {
 
     int largura = static_cast<int>(video.get(cv::CAP_PROP_FRAME_WIDTH));
     int altura = static_cast<int>(video.get(cv::CAP_PROP_FRAME_HEIGHT));
-
-    // --- Criação das Janelas e Início do Temporizador ---
-    cv::namedWindow("Resultado Final", cv::WINDOW_AUTOSIZE);
-    cv::namedWindow("Imagem Binaria", cv::WINDOW_AUTOSIZE);
-    mostrarTempoProcessamento();
 
     // --- Inicialização de Variáveis para Contagem e Tracking ---
     std::ofstream ficheiro_csv("estatisticas_moedas.csv");
@@ -331,6 +326,5 @@ int main() {
 
     mostrarTempoProcessamento();
     video.release();
-    cv::destroyAllWindows();
     return 0;
 }
