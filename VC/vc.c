@@ -5,8 +5,6 @@
 #include <math.h>
 #include "Header.h" 
 
-// NOTA: 'Header.h' também deverá ser atualizado com os novos nomes das funções e parâmetros.
-
 /**
  * Função: vc_imagem_nova
  * Descrição: Aloca memória para uma nova imagem IVC com as dimensões e parâmetros especificados.
@@ -40,7 +38,7 @@ IVC* vc_imagem_nova(int largura, int altura, int canais, int niveis) {
  * Descrição: Liberta a memória alocada para uma imagem IVC.
  * Parâmetros:
  *   - imagem: ponteiro para a estrutura IVC a libertar
- * Retorna: NULL para permitir atribuição (ex: imagem = vc_imagem_free(imagem);).
+ * Retorna: NULL
  */
 IVC* vc_imagem_free(IVC* imagem) {
     if (imagem != NULL) {
@@ -56,10 +54,10 @@ IVC* vc_imagem_free(IVC* imagem) {
 
 /**
  * Função: vc_bgr_para_cinzento
- * Descrição: Converte uma imagem a cores (formato BGR) para tons de cinzento.
+ * Descrição: Converte uma imagem a cores para tons de cinzento.
  * Parâmetros:
- *   - origem: ponteiro para a imagem de origem (a cores)
- *   - destino: ponteiro para a imagem de destino (tons de cinzento)
+ *   - origem: ponteiro para a imagem de origem
+ *   - destino: ponteiro para a imagem de destino
  * Retorna: 1 em caso de sucesso, 0 em caso de erro.
  */
 int vc_bgr_para_cinzento(IVC* origem, IVC* destino) {
@@ -77,12 +75,10 @@ int vc_bgr_para_cinzento(IVC* origem, IVC* destino) {
             long int indice_origem = y * origem->bytesperline + x * origem->channels;
             long int indice_destino = y * destino->bytesperline + x * destino->channels;
 
-            // Ordem BGR usada pelo OpenCV
             float valor_azul = (float)dados_origem[indice_origem];
             float valor_verde = (float)dados_origem[indice_origem + 1];
             float valor_vermelho = (float)dados_origem[indice_origem + 2];
 
-            // Fórmula de luminância padrão
             unsigned char valor_cinzento = (unsigned char)((valor_vermelho * 0.299) + (valor_verde * 0.587) + (valor_azul * 0.114));
 
             dados_destino[indice_destino] = valor_cinzento;
@@ -95,9 +91,9 @@ int vc_bgr_para_cinzento(IVC* origem, IVC* destino) {
  * Função: vc_cinzento_para_binario
  * Descrição: Binariza uma imagem em tons de cinzento com base num limiar.
  * Parâmetros:
- *   - origem: ponteiro para a imagem de origem (tons de cinzento)
- *   - destino: ponteiro para a imagem de destino (binária)
- *   - limiar: valor de limiarização (0-255)
+ *   - origem: ponteiro para a imagem de origem
+ *   - destino: ponteiro para a imagem de destino
+ *   - limiar: valor de limiarização
  * Retorna: 1 em caso de sucesso, 0 em caso de erro.
  */
 int vc_cinzento_para_binario(IVC* origem, IVC* destino, int limiar) {
@@ -124,7 +120,7 @@ int vc_cinzento_para_binario(IVC* origem, IVC* destino, int limiar) {
  * Função: vc_cinzento_negativo
  * Descrição: Gera o negativo de uma imagem em tons de cinzento.
  * Parâmetros:
- *   - imagem: ponteiro para a imagem a ser invertida (operação in-place).
+ *   - imagem: ponteiro para a imagem a ser invertida.
  * Retorna: 1 em caso de sucesso, 0 em caso de erro.
  */
 int vc_cinzento_negativo(IVC* imagem) {
@@ -141,9 +137,9 @@ int vc_cinzento_negativo(IVC* imagem) {
 
 /**
  * Função: vc_desenha_caixa_delimitadora
- * Descrição: Desenha a caixa delimitadora (bounding box) de um blob numa imagem a cores.
+ * Descrição: Desenha a caixa delimitadora de um blob numa imagem a cores.
  * Parâmetros:
- *   - imagem: ponteiro para a imagem de destino (a cores)
+ *   - imagem: ponteiro para a imagem de destino
  *   - blob: ponteiro para a estrutura OVC do blob
  * Retorna: 1 em caso de sucesso, 0 em caso de erro.
  */
@@ -202,11 +198,11 @@ int vc_desenha_caixa_delimitadora(IVC* imagem, OVC* blob) {
 
 /**
  * Função: vc_desenha_centro_massa
- * Descrição: Desenha o centro de massa de um blob (como uma cruz) numa imagem a cores.
+ * Descrição: Desenha o centro de massa de um blob numa imagem a cores.
  * Parâmetros:
- *   - imagem: ponteiro para a imagem de destino (a cores)
+ *   - imagem: ponteiro para a imagem de destino
  *   - blob: ponteiro para a estrutura OVC do blob
- *   - tamanho_cruz: tamanho (em píxeis) de cada braço da cruz
+ *   - tamanho_cruz: tamanho de cada braço da cruz
  * Retorna: 1 em caso de sucesso, 0 em caso de erro.
  */
 int vc_desenha_centro_massa(IVC* imagem, OVC* blob, int tamanho_cruz) {
@@ -250,7 +246,7 @@ int vc_desenha_centro_massa(IVC* imagem, OVC* blob, int tamanho_cruz) {
 int vc_blob_cor_a_descartar(IVC* imagem_cor, OVC* info_blob, const char* nome_ficheiro) {
     if (!imagem_cor || !info_blob || !imagem_cor->data || imagem_cor->channels != 3) return 0;
 
-    // Amostragem de cor numa pequena região de interesse (ROI) à volta do centro de massa
+    // Amostragem de cor numa pequena região de interesse à volta do centro de massa
     int tamanho_roi = 10;
     int metade_roi = tamanho_roi / 2;
     long long soma_r = 0, soma_g = 0, soma_b = 0;
@@ -275,8 +271,8 @@ int vc_blob_cor_a_descartar(IVC* imagem_cor, OVC* info_blob, const char* nome_fi
     float media_g_norm = ((float)soma_g / contagem_pixeis) / 255.0f;
     float media_b_norm = ((float)soma_b / contagem_pixeis) / 255.0f;
 
-    // Conversão manual de RGB para HSV
-    float h, s, v; // Hue, Saturation, Value (Matiz, Saturação, Valor)
+    // Conversão de RGB para HSV
+    float h, s, v;
     float max_cor = fmaxf(fmaxf(media_r_norm, media_g_norm), media_b_norm);
     float min_cor = fminf(fminf(media_r_norm, media_g_norm), media_b_norm);
     float delta = max_cor - min_cor;
@@ -292,13 +288,13 @@ int vc_blob_cor_a_descartar(IVC* imagem_cor, OVC* info_blob, const char* nome_fi
         if (h < 0.0f) { h += 360.0f; } // Garante que o matiz está entre 0 e 360
     }
 
-    // Lógica para definir se uma cor deve ser descartada (objetos coloridos)
+    // Lógica para definir se uma cor deve ser descartada
     int cor_e_vermelha = (h >= 340 || h <= 20) && (s > 0.5f) && (v > 0.3f);
     int cor_e_verde = (h >= 75 && h <= 175) && (s > 0.40f) && (v > 0.20f);
     int cor_e_azul = (h >= 180 && h <= 280) && (s > 0.4f) && (v > 0.3f);
     int cor_e_amarela = (h >= 45 && h <= 75) && (s > 0.7f) && (v > 0.6f);
 
-    // Filtro dinâmico para objetos pretos, ajustado por vídeo
+    // Filtro dinâmico para objetos pretos
     int cor_e_preta = 0;
     if (strcmp(nome_ficheiro, "video1.mp4") == 0) {
         cor_e_preta = v < 0.12f; // Limiar de brilho baixo para video1
@@ -311,17 +307,13 @@ int vc_blob_cor_a_descartar(IVC* imagem_cor, OVC* info_blob, const char* nome_fi
     return (cor_e_vermelha || cor_e_verde || cor_e_azul || cor_e_amarela || cor_e_preta);
 }
 
-/* ============================================================================
- * Operações Morfológicas Binárias
- * ==========================================================================*/
-
  /**
   * Função: vc_binario_erosao
   * Descrição: Realiza a operação de erosão numa imagem binária.
   * Parâmetros:
-  *   - origem: ponteiro para a imagem de origem (binária)
-  *   - destino: ponteiro para a imagem de destino (binária)
-  *   - tamanho_kernel: tamanho do elemento estruturante (deve ser ímpar)
+  *   - origem: ponteiro para a imagem de origem
+  *   - destino: ponteiro para a imagem de destino
+  *   - tamanho_kernel: tamanho do elemento estruturante
   * Retorna: 1 em caso de sucesso, 0 em caso de erro.
   */
 int vc_binario_erosao(IVC* origem, IVC* destino, int tamanho_kernel) {
@@ -359,9 +351,9 @@ int vc_binario_erosao(IVC* origem, IVC* destino, int tamanho_kernel) {
  * Função: vc_binario_dilatacao
  * Descrição: Realiza a operação de dilatação numa imagem binária.
  * Parâmetros:
- *   - origem: ponteiro para a imagem de origem (binária)
- *   - destino: ponteiro para a imagem de destino (binária)
- *   - tamanho_kernel: tamanho do elemento estruturante (deve ser ímpar)
+ *   - origem: ponteiro para a imagem de origem
+ *   - destino: ponteiro para a imagem de destino
+ *   - tamanho_kernel: tamanho do elemento estruturante
  * Retorna: 1 em caso de sucesso, 0 em caso de erro.
  */
 int vc_binario_dilatacao(IVC* origem, IVC* destino, int tamanho_kernel) {
@@ -396,11 +388,11 @@ int vc_binario_dilatacao(IVC* origem, IVC* destino, int tamanho_kernel) {
 
 /**
  * Função: vc_binario_abertura
- * Descrição: Realiza a operação de abertura (erosão seguida de dilatação). Útil para remover ruído pequeno.
+ * Descrição: Realiza a operação de abertura (erosão seguida de dilatação).
  * Parâmetros:
- *   - origem: ponteiro para a imagem de origem (binária)
- *   - destino: ponteiro para a imagem de destino (binária)
- *   - tamanho_kernel: tamanho do kernel (ímpar)
+ *   - origem: ponteiro para a imagem de origem
+ *   - destino: ponteiro para a imagem de destino
+ *   - tamanho_kernel: tamanho do kernel
  *   - temp: imagem temporária auxiliar
  * Retorna: 1 em caso de sucesso, 0 em caso de erro.
  */
@@ -412,11 +404,11 @@ int vc_binario_abertura(IVC* origem, IVC* destino, int tamanho_kernel, IVC* temp
 
 /**
  * Função: vc_binario_fecho
- * Descrição: Realiza a operação de fecho (dilatação seguida de erosão). Útil para preencher pequenos buracos.
+ * Descrição: Realiza a operação de fecho (dilatação seguida de erosão).
  * Parâmetros:
- *   - origem: ponteiro para a imagem de origem (binária)
- *   - destino: ponteiro para a imagem de destino (binária)
- *   - tamanho_kernel: tamanho do kernel (ímpar)
+ *   - origem: ponteiro para a imagem de origem
+ *   - destino: ponteiro para a imagem de destino
+ *   - tamanho_kernel: tamanho do kernel
  *   - temp: imagem temporária auxiliar
  * Retorna: 1 em caso de sucesso, 0 em caso de erro.
  */
@@ -428,10 +420,10 @@ int vc_binario_fecho(IVC* origem, IVC* destino, int tamanho_kernel, IVC* temp) {
 
 /**
   * Função: vc_cinzento_box_blur
-  * Descrição: Aplica um filtro de suavização (box blur) a uma imagem em tons de cinzento.
+  * Descrição: Aplica um filtro de suavização a uma imagem em tons de cinzento.
   * Parâmetros:
-  *   - origem: ponteiro para a imagem de origem (tons de cinzento)
-  *   - destino: ponteiro para a imagem de destino (tons de cinzento)
+  *   - origem: ponteiro para a imagem de origem
+  *   - destino: ponteiro para a imagem de destino
   *   - tamanho_kernel: tamanho do kernel (ímpar >= 3)
   * Retorna: 1 em caso de sucesso, 0 em caso de erro.
   */
@@ -466,7 +458,7 @@ int vc_cinzento_box_blur(IVC* origem, IVC* destino, int tamanho_kernel) {
  * Função: vc_desenha_linha_horizontal
  * Descrição: Desenha uma linha horizontal numa imagem a cores.
  * Parâmetros:
- *   - imagem: ponteiro para a imagem de destino (a cores)
+ *   - imagem: ponteiro para a imagem de destin
  *   - y: coordenada vertical da linha
  *   - vermelho, verde, azul: componentes da cor da linha
  * Retorna: 1 em caso de sucesso, 0 em caso de erro.

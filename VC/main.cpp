@@ -12,10 +12,10 @@ extern "C" {
 }
 
 /**
- * Função: mostrarTempoProcessamento
+ * Função: tempoDecorrido
  * Descrição: Mostra o tempo decorrido desde a última chamada e aguarda input do utilizador.
  */
-void mostrarTempoProcessamento() {
+void tempoDecorrido() {
     static bool primeiro_ciclo = true;
     static auto tempo_anterior = std::chrono::steady_clock::now();
 
@@ -33,7 +33,7 @@ void mostrarTempoProcessamento() {
 
 /**
  * Função: identificarTipoMoeda
- * Descrição: Identifica o tipo de moeda com base na sua área e no vídeo de origem.
+ * Descrição: Identifica o tipo de moeda.
  */
 std::string identificarTipoMoeda(double area, const std::string& nome_video) {
     std::string tipo_moeda = "Desconhecida";
@@ -65,10 +65,10 @@ std::string identificarTipoMoeda(double area, const std::string& nome_video) {
 }
 
 /**
- * Função: calcularPropriedadesBlobManualmente
+ * Função: calcularPropriedadesBlob
  * Descrição: Calcula a caixa delimitadora e o centroide de um contorno.
  */
-void calcularPropriedadesBlobManualmente(const std::vector<cv::Point>& contorno, OVC& info_blob) {
+void calcularPropriedadesBlob(const std::vector<cv::Point>& contorno, OVC& info_blob) {
     if (contorno.empty()) return;
 
     int min_x = contorno[0].x, max_x = contorno[0].x;
@@ -96,14 +96,14 @@ void calcularPropriedadesBlobManualmente(const std::vector<cv::Point>& contorno,
 
 
 // Função para calcular o perímetro de um contorno
-double calcularPerimetroManualmente(const std::vector<cv::Point>& contorno) {
+double calcularPerimetro(const std::vector<cv::Point>& contorno) {
     double perimetro = 0.0;
     if (contorno.size() < 2) return 0.0;
 
     for (size_t i = 0; i < contorno.size(); ++i) {
         // Ponto atual
         cv::Point p1 = contorno[i];
-        // Próximo ponto (o operador % garante que o último ponto se liga ao primeiro)
+        // Próximo ponto (o operador % garante que o último ponto é ligado ao primeiro)
         cv::Point p2 = contorno[(i + 1) % contorno.size()];
 
         // Usa std::hypot para maior precisão e segurança numérica
@@ -120,7 +120,7 @@ double calcularPerimetroManualmente(const std::vector<cv::Point>& contorno) {
  * Função principal (main)
  */
 int main() {
-    // --- Configurações Iniciais ---
+    // Configurações Iniciais
     std::string nome_video = "video1.mp4";
     int limiar_binarizacao;
 
@@ -141,10 +141,6 @@ int main() {
     int largura = static_cast<int>(video.get(cv::CAP_PROP_FRAME_WIDTH));
     int altura = static_cast<int>(video.get(cv::CAP_PROP_FRAME_HEIGHT));
 
-    // --- Inicialização de Variáveis para Contagem e Tracking ---
-    std::ofstream ficheiro_csv("estatisticas_moedas.csv");
-    ficheiro_csv << "TipoMoeda,Area,CentroX,CentroY\n";
-
     const int linha_de_contagem_y = altura / 3;
     int proximo_id_objeto = 0;
     std::map<int, cv::Point> objetos_rastreados;
@@ -162,7 +158,7 @@ int main() {
         video >> frame_original;
         if (frame_original.empty()) break;
 
-        // --- 1. PREPARAÇÃO E PROCESSAMENTO DA IMAGEM ---
+        // PREPARAÇÃO E PROCESSAMENTO DA IMAGEM
         IVC* img_cor = vc_imagem_nova(largura, altura, 3, 255);
         memcpy(img_cor->data, frame_original.data, largura * altura * 3);
 
@@ -179,22 +175,22 @@ int main() {
 
         vc_imagem_free(img_temp);
 
-        // --- 2. ANÁLISE DE BLOBS E TRACKING ---
+        // ANÁLISE DE BLOBS E TRACKING
         cv::Mat imagem_binaria_opencv(altura, largura, CV_8UC1, img_binaria->data);
         std::vector<std::vector<cv::Point>> contornos;
         cv::findContours(imagem_binaria_opencv, contornos, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-        // Vetores para guardar os blobs válidos e as suas propriedades correspondentes
+        // Vetores para guardar os blobs válidos e as propriedades correspondentes
         std::vector<OVC> blobs_validos_frame;
         std::vector<double> areas_validas_frame;
-        std::vector<double> circularidades_validas_frame; // NOVO: Vetor para guardar a circularidade
+        std::vector<double> circularidades_validas_frame;
 
         for (const auto& contorno : contornos) {
             double area = cv::contourArea(contorno);
             if (area < 1500) continue;
 
             OVC info_blob = { 0 };
-            calcularPropriedadesBlobManualmente(contorno, info_blob);
+            calcularPropriedadesBlob(contorno, info_blob);
 
             if (vc_blob_cor_a_descartar(img_cor, &info_blob, nome_video.c_str())) {
                 continue;
@@ -209,19 +205,19 @@ int main() {
            
 
             // FILTRO DE CIRCULARIDADE 
-            double perimetro = calcularPerimetroManualmente(contorno);
+            double perimetro = calcularPerimetro(contorno);
             if (perimetro == 0) continue;
             double circularidade = (4 * 3.14159265359 * area) / (perimetro * perimetro);
             if (circularidade < 0.40) {
                 continue;
             }
 
-            // Se o blob passou todos os filtros, guarda todas as suas informações
+            // Se o blob passou todos os filtros, guarda todas as informações
             blobs_validos_frame.push_back(info_blob);
             areas_validas_frame.push_back(area);
             circularidades_validas_frame.push_back(circularidade); 
 
-            // --- LÓGICA DE TRACKING E CONTAGEM ---
+            // LÓGICA DE TRACKING E CONTAGEM
             cv::Point centro_atual(info_blob.xc, info_blob.yc);
             int id_associado = -1;
             double menor_distancia = distancia_minima_tracking;
@@ -253,7 +249,7 @@ int main() {
                         else if (tipo_moeda == "20c") valor_total_euros += 0.20; else if (tipo_moeda == "50c") valor_total_euros += 0.50;
                         else if (tipo_moeda == "1euro") valor_total_euros += 1.00; else if (tipo_moeda == "2euro") valor_total_euros += 2.00;
                     }
-                    ficheiro_csv << tipo_moeda << "," << area << "," << centro_atual.x << "," << centro_atual.y << "\n";
+                    
                 }
             }
             else {
@@ -263,9 +259,9 @@ int main() {
                     proximo_id_objeto++;
                 }
             }
-        } // --- Fim do loop de processamento de contornos ---
+        }
 
-        // --- 3. DESENHO DOS RESULTADOS E EXIBIÇÃO ---
+        // PAINEL DOS RESULTADOS
         vc_desenha_linha_horizontal(img_cor, linha_de_contagem_y, 255, 0, 0);
 
         for (const auto& blob : blobs_validos_frame) {
@@ -275,13 +271,11 @@ int main() {
 
         memcpy(frame_original.data, img_cor->data, largura * altura * 3);
 
-        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-        // +++ DESENHAR O TEXTO DAS MOEDAS (COM CIRCULARIDADE) +++
-        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        // DESENHAR O TEXTO DAS MOEDAS (COM CIRCULARIDADE)
         for (size_t i = 0; i < blobs_validos_frame.size(); ++i) {
             OVC blob_info = blobs_validos_frame[i];
             double area = areas_validas_frame[i];
-            double circularidade = circularidades_validas_frame[i]; // NOVO: Obtém o valor guardado
+            double circularidade = circularidades_validas_frame[i];
 
             std::string tipo_moeda = identificarTipoMoeda(area, nome_video);
 
@@ -290,12 +284,12 @@ int main() {
                 int y_pos = blob_info.y - 10;
                 if (y_pos < 10) y_pos = blob_info.y + blob_info.height + 20;
 
-                // Formata o valor da circularidade para ter 2 casas decimais
+                // Passar o valor da circularidade para 2 casas décimais
                 std::stringstream ss;
                 ss << std::fixed << std::setprecision(2) << circularidade;
                 std::string circ_texto = ss.str();
 
-                // Cria o texto final para depuração
+                // Cria o texto final
                 std::string texto_info = tipo_moeda + " (C:" + circ_texto + ")";
 
                 cv::putText(frame_original, texto_info, cv::Point(x_pos, y_pos), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0), 2);
@@ -325,7 +319,7 @@ int main() {
         vc_imagem_free(img_cinza);
         vc_imagem_free(img_binaria);
 
-        // --- Gestão de Input do Utilizador ---
+        // Gestão de Input do Utilizador
         tecla_pressionada = cv::waitKey(1) & 0xFF;
         if (tecla_pressionada == 'p') {
             while (true) {
@@ -336,10 +330,7 @@ int main() {
                 }
             }
         }
-    } // --- Fim do loop 'while' ---
-
-    // --- Finalização ---
-    ficheiro_csv.close();
+    }
 
     std::cout << "\n=== Contagem Final ===\n";
     std::cout << "Total de moedas contadas: " << total_moedas_contadas << "\n";
@@ -348,7 +339,7 @@ int main() {
     }
     std::cout << "Valor Total Acumulado: " << std::fixed << std::setprecision(2) << valor_total_euros << " EUR\n";
 
-    mostrarTempoProcessamento();
+    tempoDecorrido();
     video.release();
     return 0;
 }
