@@ -1,91 +1,74 @@
 #ifndef HEADER_H
 #define HEADER_H
 
- /* ============================================================================
-  * Estruturas de Dados
-  * ==========================================================================*/
+/* ============================================================================
+ * Estruturas de Dados
+ * ==========================================================================*/
 
-  /**
-   * Estrutura: IVC
-   * Descrição: Representa uma imagem genérica, podendo ser a cores ou tons de cinzento.
-   * Campos:
-   *   - data: ponteiro para os dados da imagem
-   *   - width: largura da imagem (píxeis)
-   *   - height: altura da imagem (píxeis)
-   *   - channels: número de canais (1=gray, 3=BGR)
-   *   - levels: número de níveis de intensidade
-   *   - bytesperline: número de bytes por linha
-   */
+ /**
+  * Estrutura: IVC (Imagem Visão Computacional)
+  * Descrição: Representa uma imagem genérica.
+  * Nota: Os campos internos mantêm-se em inglês para facilitar a interação
+  *       com as estruturas de dados do OpenCV (cv::Mat).
+  */
 typedef struct {
-    unsigned char* data;
-    int width, height;
-    int channels;
-    int levels;
-    int bytesperline;
+    unsigned char* data;    // Ponteiro para os dados da imagem
+    int width, height;      // Largura e altura em píxeis
+    int channels;           // Número de canais (1=gray, 3=BGR)
+    int levels;             // Níveis de intensidade (ex: 256)
+    int bytesperline;       // Número de bytes por linha
 } IVC;
 
 /**
- * Estrutura: OVC
- * Descrição: Representa um blob (objeto identificado na imagem) e as suas propriedades geométricas.
- * Campos:
- *   - x, y: coordenadas do canto superior esquerdo
- *   - width, height: dimensões do blob
- *   - xc, yc: coordenadas do centro de gravidade
+ * Estrutura: OVC (Objeto Visão Computacional)
+ * Descrição: Representa um blob (objeto identificado) e as suas propriedades.
  */
 typedef struct {
-    int x, y;
-    int width, height;
-    int xc, yc;
+    int x, y;               // Coordenadas do canto superior esquerdo
+    int width, height;      // Dimensões do blob (bounding box)
+    int xc, yc;             // Coordenadas do centro de massa (centroide)
 } OVC;
 
+
 /* ============================================================================
- * Protótipos das Funções de Processamento de Imagem
+ * Protótipos das Funções de Gestão de Imagem
  * ==========================================================================*/
 
  /**
   * Aloca memória para uma nova imagem IVC.
   */
-IVC* vc_image_new(int width, int height, int channels, int levels);
+IVC* vc_imagem_nova(int largura, int altura, int canais, int niveis);
 
 /**
  * Liberta a memória alocada para uma imagem IVC.
  */
-IVC* vc_image_free(IVC* image);
+IVC* vc_imagem_free(IVC* imagem);
 
-/**
- * Converte uma imagem RGB para tons de cinzento.
- */
-int vc_rgb_to_gray(IVC* src, IVC* dst);
+
+/* ============================================================================
+ * Protótipos das Funções de Conversão e Filtragem
+ * ==========================================================================*/
+
+ /**
+  * Converte uma imagem BGR (cores) para tons de cinzento.
+  */
+int vc_bgr_para_cinzento(IVC* origem, IVC* destino);
 
 /**
  * Binariza uma imagem em tons de cinzento com base num limiar.
  */
-int vc_gray_to_binary(IVC* src, IVC* dst, int threshold);
+int vc_cinzento_para_binario(IVC* origem, IVC* destino, int limiar);
 
 /**
- * Gera o negativo de uma imagem em tons de cinzento.
+ * Gera o negativo de uma imagem em tons de cinzento (in-place).
  */
-int vc_gray_negative(IVC* srcdst);
+int vc_cinzento_negativo(IVC* imagem);
 
 /**
- * Desenha a bounding box de um blob numa imagem a cores.
+ * Aplica um filtro de suavização (box blur) a uma imagem em tons de cinzento.
  */
-int vc_draw_bounding_box(IVC* img, OVC* blob);
+int vc_cinzento_box_blur(IVC* origem, IVC* destino, int tamanho_kernel);
 
-/**
- * Desenha o centro de gravidade de um blob numa imagem a cores.
- */
-int vc_draw_center_of_gravity(IVC* img, OVC* blob, int size);
-
-/**
- * Determina se o blob deve ser descartado com base na cor média.
- */
-int blob_e_cor_a_descartar(IVC* img_colorida, OVC* blob_info, const char* ficheiro);
-
-/**
- * Desenha uma linha horizontal numa imagem a cores.
- */
-int vc_draw_horizontal_line(IVC* img, int y, int r, int g, int b);
 
 /* ============================================================================
  * Protótipos das Funções de Morfologia Binária
@@ -94,21 +77,47 @@ int vc_draw_horizontal_line(IVC* img, int y, int r, int g, int b);
  /**
   * Realiza erosão binária numa imagem binária.
   */
-int vc_binary_erode(IVC* src, IVC* dst, int kernel_size);
+int vc_binario_erosao(IVC* origem, IVC* destino, int tamanho_kernel);
 
 /**
  * Realiza dilatação binária numa imagem binária.
  */
-int vc_binary_dilate(IVC* src, IVC* dst, int kernel_size);
+int vc_binario_dilatacao(IVC* origem, IVC* destino, int tamanho_kernel);
 
 /**
- * Realiza a operação de abertura binária.
+ * Realiza a operação de abertura binária (erosão + dilatação).
  */
-int vc_binary_open(IVC* src, IVC* dst, int kernel_size, IVC* temp);
+int vc_binario_abertura(IVC* origem, IVC* destino, int tamanho_kernel, IVC* temp);
 
 /**
- * Realiza a operação de fecho binário.
+ * Realiza a operação de fecho binário (dilatação + erosão).
  */
-int vc_binary_close(IVC* src, IVC* dst, int kernel_size, IVC* temp);
+int vc_binario_fecho(IVC* origem, IVC* destino, int tamanho_kernel, IVC* temp);
+
+
+/* ============================================================================
+ * Protótipos das Funções de Análise e Desenho
+ * ==========================================================================*/
+
+ /**
+  * Determina se o blob deve ser descartado com base na cor média (conversão HSV manual).
+  */
+int vc_blob_cor_a_descartar(IVC* imagem_cor, OVC* info_blob, const char* nome_ficheiro);
+
+/**
+ * Desenha a caixa delimitadora (bounding box) de um blob numa imagem a cores.
+ */
+int vc_desenha_caixa_delimitadora(IVC* imagem, OVC* blob);
+
+/**
+ * Desenha o centro de massa (centroide) de um blob numa imagem a cores.
+ */
+int vc_desenha_centro_massa(IVC* imagem, OVC* blob, int tamanho_cruz);
+
+/**
+ * Desenha uma linha horizontal numa imagem a cores.
+ */
+int vc_desenha_linha_horizontal(IVC* imagem, int y, int vermelho, int verde, int azul);
+
 
 #endif // HEADER_H
