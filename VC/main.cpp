@@ -92,6 +92,30 @@ void calcularPropriedadesBlobManualmente(const std::vector<cv::Point>& contorno,
     info_blob.yc = static_cast<int>(soma_y / contorno.size());
 }
 
+
+
+
+// Função para calcular o perímetro de um contorno
+double calcularPerimetroManualmente(const std::vector<cv::Point>& contorno) {
+    double perimetro = 0.0;
+    if (contorno.size() < 2) return 0.0;
+
+    for (size_t i = 0; i < contorno.size(); ++i) {
+        // Ponto atual
+        cv::Point p1 = contorno[i];
+        // Próximo ponto (o operador % garante que o último ponto se liga ao primeiro)
+        cv::Point p2 = contorno[(i + 1) % contorno.size()];
+
+        // Usa std::hypot para maior precisão e segurança numérica
+        perimetro += std::hypot(p2.x - p1.x, p2.y - p1.y);
+    }
+
+    return perimetro;
+}
+
+
+
+
 /**
  * Função principal (main)
  */
@@ -177,15 +201,15 @@ int main() {
             }
 
             /*
-            // --- FILTRO DE PROPORÇÃO (MÉTODO ANTIGO, COMENTADO) ---
+            // FILTRO DE PROPORÇÃO
             float proporcao = (float)info_blob.width / (float)info_blob.height;
             if (proporcao < 0.9f || proporcao > 1.1f) {
                 continue;
             }
             */
 
-            // --- FILTRO DE CIRCULARIDADE (MÉTODO ATUAL) ---
-            double perimetro = cv::arcLength(contorno, true);
+            // FILTRO DE CIRCULARIDADE 
+            double perimetro = calcularPerimetroManualmente(contorno);
             if (perimetro == 0) continue;
             double circularidade = (4 * 3.14159265359 * area) / (perimetro * perimetro);
             if (circularidade < 0.40) {
@@ -195,7 +219,7 @@ int main() {
             // Se o blob passou todos os filtros, guarda todas as suas informações
             blobs_validos_frame.push_back(info_blob);
             areas_validas_frame.push_back(area);
-            circularidades_validas_frame.push_back(circularidade); // NOVO: Guarda o valor da circularidade
+            circularidades_validas_frame.push_back(circularidade); 
 
             // --- LÓGICA DE TRACKING E CONTAGEM ---
             cv::Point centro_atual(info_blob.xc, info_blob.yc);
