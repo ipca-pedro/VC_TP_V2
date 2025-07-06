@@ -125,7 +125,7 @@ int main() {
     int limiar_binarizacao;
 
     if (nome_video == "video1.mp4") {
-        limiar_binarizacao = 100;
+        limiar_binarizacao = 110;
     }
     else if (nome_video == "video2.mp4") {
         limiar_binarizacao = 120;
@@ -200,13 +200,13 @@ int main() {
                 continue;
             }
 
-            /*
+            
             // FILTRO DE PROPORÇÃO
             float proporcao = (float)info_blob.width / (float)info_blob.height;
-            if (proporcao < 0.9f || proporcao > 1.1f) {
+            if (proporcao < 0.8f || proporcao > 1.1f) {
                 continue;
             }
-            */
+           
 
             // FILTRO DE CIRCULARIDADE 
             double perimetro = calcularPerimetroManualmente(contorno);
