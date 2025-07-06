@@ -251,7 +251,7 @@ int vc_blob_cor_a_descartar(IVC* imagem_cor, OVC* info_blob, const char* nome_fi
     if (!imagem_cor || !info_blob || !imagem_cor->data || imagem_cor->channels != 3) return 0;
 
     // Amostragem de cor numa pequena região de interesse (ROI) à volta do centro de massa
-    int tamanho_roi = 5;
+    int tamanho_roi = 10;
     int metade_roi = tamanho_roi / 2;
     long long soma_r = 0, soma_g = 0, soma_b = 0;
     int contagem_pixeis = 0;

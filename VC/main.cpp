@@ -165,9 +165,10 @@ int main() {
         std::vector<std::vector<cv::Point>> contornos;
         cv::findContours(imagem_binaria_opencv, contornos, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
 
-        // Vetores para guardar os blobs válidos e as suas áreas correspondentes para este frame
+        // Vetores para guardar os blobs válidos e as suas propriedades correspondentes
         std::vector<OVC> blobs_validos_frame;
         std::vector<double> areas_validas_frame;
+        std::vector<double> circularidades_validas_frame; // NOVO: Vetor para guardar a circularidade
 
         for (const auto& contorno : contornos) {
             double area = cv::contourArea(contorno);
@@ -180,15 +181,26 @@ int main() {
                 continue;
             }
 
-            // Filtra objetos que não são suficientemente circulares (filtro de proporção)
+            /*
+            // --- FILTRO DE PROPORÇÃO (MÉTODO ANTIGO, COMENTADO) ---
             float proporcao = (float)info_blob.width / (float)info_blob.height;
-            if (proporcao < 0.8f || proporcao > 1.2f) {
-                continue; // Descarta o objeto se não for suficientemente quadrado
+            if (proporcao < 0.9f || proporcao > 1.1f) {
+                continue;
+            }
+            */
+
+            // --- FILTRO DE CIRCULARIDADE (MÉTODO ATUAL) ---
+            double perimetro = cv::arcLength(contorno, true);
+            if (perimetro == 0) continue;
+            double circularidade = (4 * 3.14159265359 * area) / (perimetro * perimetro);
+            if (circularidade < 0.40) {
+                continue;
             }
 
-            // Se o blob passou todos os filtros, guarda-o juntamente com a sua área
+            // Se o blob passou todos os filtros, guarda todas as suas informações
             blobs_validos_frame.push_back(info_blob);
             areas_validas_frame.push_back(area);
+            circularidades_validas_frame.push_back(circularidade); // NOVO: Guarda o valor da circularidade
 
             // --- LÓGICA DE TRACKING E CONTAGEM ---
             cv::Point centro_atual(info_blob.xc, info_blob.yc);
@@ -244,11 +256,13 @@ int main() {
 
         memcpy(frame_original.data, img_cor->data, largura * altura * 3);
 
-
-        // DESENHAR O TEXTO DAS MOEDAS 
+        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+        // +++ DESENHAR O TEXTO DAS MOEDAS (COM CIRCULARIDADE) +++
+        // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
         for (size_t i = 0; i < blobs_validos_frame.size(); ++i) {
             OVC blob_info = blobs_validos_frame[i];
             double area = areas_validas_frame[i];
+            double circularidade = circularidades_validas_frame[i]; // NOVO: Obtém o valor guardado
 
             std::string tipo_moeda = identificarTipoMoeda(area, nome_video);
 
@@ -257,7 +271,13 @@ int main() {
                 int y_pos = blob_info.y - 10;
                 if (y_pos < 10) y_pos = blob_info.y + blob_info.height + 20;
 
-                std::string texto_info = tipo_moeda + " (" + std::to_string(static_cast<int>(area)) + ")";
+                // Formata o valor da circularidade para ter 2 casas decimais
+                std::stringstream ss;
+                ss << std::fixed << std::setprecision(2) << circularidade;
+                std::string circ_texto = ss.str();
+
+                // Cria o texto final para depuração
+                std::string texto_info = tipo_moeda + " (C:" + circ_texto + ")";
 
                 cv::putText(frame_original, texto_info, cv::Point(x_pos, y_pos), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0), 2);
                 cv::putText(frame_original, texto_info, cv::Point(x_pos, y_pos), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 255, 0), 1);
